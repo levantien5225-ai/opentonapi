@@ -9,7 +9,7 @@ import (
 type CurrencyType string
 
 const (
-	CurrencyTON    CurrencyType = "native"
+	CurrencyNative CurrencyType = "native"
 	CurrencyExtra  CurrencyType = "extra_currency"
 	CurrencyJetton CurrencyType = "jetton"
 	CurrencyFiat   CurrencyType = "fiat"
@@ -31,9 +31,16 @@ type VaultDepositInfo struct {
 	Vault tongo.AccountID
 }
 
-func PriceNanoTON(amount int64) Price {
+func PriceNanoGram(amount int64) Price {
 	return Price{
-		Currency: Currency{Type: CurrencyTON},
+		Currency: Currency{Type: CurrencyNative},
 		Amount:   *big.NewInt(amount),
+	}
+}
+
+func NewCurrencyJetton(master *tongo.AccountID) Currency {
+	return Currency{
+		Type:   CurrencyJetton,
+		Jetton: master,
 	}
 }

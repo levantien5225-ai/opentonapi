@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"math/big"
+	"slices"
 	"sort"
 
 	imgGenerator "github.com/tonkeeper/opentonapi/pkg/image"
@@ -19,7 +20,7 @@ import (
 func convertToRawAccount(account *core.Account) (oas.BlockchainRawAccount, error) {
 	rawAccount := oas.BlockchainRawAccount{
 		Address:           account.AccountAddress.ToRaw(),
-		Balance:           account.TonBalance,
+		Balance:           account.GramBalance,
 		LastTransactionLt: int64(account.LastTransactionLt),
 		Status:            oas.AccountStatus(account.Status),
 		Storage: oas.AccountStorageInfo{
@@ -90,10 +91,14 @@ func convertExtraCurrencies(extraBalances core.ExtraCurrencies) []oas.ExtraCurre
 	return res
 }
 
+func isNftCollection(account *core.Account) bool {
+	return slices.Contains(account.Interfaces, abi.NftCollection)
+}
+
 func convertToAccount(account *core.Account, ab *addressbook.KnownAddress, state chainState, spamFilter SpamFilter) oas.Account {
 	acc := oas.Account{
 		Address:      account.AccountAddress.ToRaw(),
-		Balance:      account.TonBalance,
+		Balance:      account.GramBalance,
 		LastActivity: account.LastActivityTime,
 		Status:       oas.AccountStatus(account.Status),
 		Interfaces:   make([]string, len(account.Interfaces)),
@@ -136,7 +141,7 @@ func convertToWallet(
 ) oas.Wallet {
 	wallet := oas.Wallet{
 		Address:      account.AccountAddress.ToRaw(),
-		Balance:      account.TonBalance,
+		Balance:      account.GramBalance,
 		LastActivity: account.LastActivityTime,
 		GetMethods:   []string{},
 		Status:       oas.AccountStatus(account.Status),

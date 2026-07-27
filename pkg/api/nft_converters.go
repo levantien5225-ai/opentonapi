@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/tonkeeper/opentonapi/internal/g"
 	"github.com/tonkeeper/opentonapi/pkg/bath"
@@ -40,7 +41,8 @@ func (h *Handler) convertNFT(ctx context.Context, item core.NftItem, book addres
 			Price:   h.convertPrice(ctx, item.Sale.Price),
 		}))
 	}
-	var image, description string
+	var image, description, name string
+	var collectionName, collectionDescription string
 	if item.Metadata != nil {
 		if imageI, prs := item.Metadata["image"]; prs {
 			image, _ = imageI.(string)
@@ -48,10 +50,17 @@ func (h *Handler) convertNFT(ctx context.Context, item core.NftItem, book addres
 		if descriptionI, prs := item.Metadata["description"]; prs {
 			description, _ = descriptionI.(string)
 		}
+		if nameI, prs := item.Metadata["name"]; prs {
+			name, _ = nameI.(string)
+		}
 	}
+	var collectionOwner *tongo.AccountID
 	if item.CollectionAddress != nil {
 		collectionAddr := *item.CollectionAddress
 		cInfo, _ := metaCache.getCollectionMeta(ctx, collectionAddr)
+		collectionName = cInfo.Name
+		collectionDescription = cInfo.Description
+		collectionOwner = cInfo.Owner
 		if cc, prs := book.GetCollectionInfoByAddress(collectionAddr); prs {
 			for _, approver := range cc.Approvers {
 				nftItem.ApprovedBy = append(nftItem.ApprovedBy, oas.NftApprovedByItem(approver))
@@ -80,7 +89,7 @@ func (h *Handler) convertNFT(ctx context.Context, item core.NftItem, book addres
 	if len(nftItem.ApprovedBy) > 0 && nftItem.Verified {
 		nftItem.Trust = oas.TrustType(core.TrustWhitelist)
 	} else {
-		nftTrust := h.spamFilter.NftTrust(item.Address, item.CollectionAddress, description, image)
+		nftTrust := h.spamFilter.NftTrust(item.Address, item.CollectionAddress, item.OwnerAddress, collectionOwner, name, description, image, collectionName, collectionDescription)
 		if nftTrust == core.TrustNone && trustType != "" {
 			nftTrust = trustType
 		}
@@ -100,30 +109,49 @@ func (h *Handler) convertNFT(ctx context.Context, item core.NftItem, book addres
 	return nftItem
 }
 
-func convertNftCollection(collection core.NftCollection, book addressBook) oas.NftCollection {
+func (h *Handler) convertNftCollection(collection core.NftCollection, book addressBook) oas.NftCollection {
 	nftCollection := oas.NftCollection{
 		Address:              collection.Address.ToRaw(),
 		NextItemIndex:        int64(collection.NextItemIndex),
 		RawCollectionContent: fmt.Sprintf("%x", collection.CollectionContent[:]),
 		Owner:                convertOptAccountAddress(collection.OwnerAddress, book),
 	}
-	if len(collection.Metadata) == 0 {
-		return nftCollection
-	}
-	metadata := make(map[string]jx.Raw)
-	image := references.Placeholder
-	for k, v := range collection.Metadata {
-		if k == "image" {
-			if img, ok := v.(string); ok && img != "" {
-				image = img
-			}
+	var image, description, name string
+	if len(collection.Metadata) != 0 {
+		if v, ok := collection.Metadata["image"]; ok {
+			image, _ = v.(string)
 		}
-		if raw, err := json.Marshal(v); err == nil {
-			metadata[k] = raw
+		if v, ok := collection.Metadata["description"]; ok {
+			description, _ = v.(string)
+		}
+		if v, ok := collection.Metadata["name"]; ok {
+			name, _ = v.(string)
 		}
 	}
 	if known, ok := book.GetCollectionInfoByAddress(collection.Address); ok {
 		nftCollection.ApprovedBy = append(nftCollection.ApprovedBy, known.Approvers...)
+	}
+	if len(nftCollection.ApprovedBy) != 0 {
+		nftCollection.Trust = oas.TrustType(core.TrustWhitelist)
+	} else {
+		nftCollection.Trust = oas.TrustType(h.spamFilter.NftTrust(collection.Address, nil, collection.OwnerAddress, nil, name, description, image, "", ""))
+	}
+
+	if collection.ContentURL != "" && (strings.HasPrefix(collection.ContentURL, "http://") || strings.HasPrefix(collection.ContentURL, "https://")) {
+		nftCollection.MetadataStatus.SetTo(formatMetadataStatus(collection))
+	}
+
+	if len(collection.Metadata) == 0 {
+		return nftCollection
+	}
+	metadata := make(map[string]jx.Raw)
+	if image == "" {
+		image = references.Placeholder
+	}
+	for k, v := range collection.Metadata {
+		if raw, err := json.Marshal(v); err == nil {
+			metadata[k] = raw
+		}
 	}
 	nftCollection.Metadata.SetTo(metadata)
 	for _, size := range []int{5, 100, 500, 1500} {
@@ -134,6 +162,22 @@ func convertNftCollection(collection core.NftCollection, book addressBook) oas.N
 		})
 	}
 	return nftCollection
+}
+
+func formatMetadataStatus(collection core.NftCollection) oas.NftCollectionMetadataStatus {
+	status := oas.NftCollectionMetadataStatus{
+		URL:                oas.NewOptString(collection.ContentURL),
+		IsBroken:           oas.NewOptBool(collection.LastOffchainMetaRefreshSuccess.IsZero()),
+		LastRefreshTry:     oas.OptNilInt64{Null: true},
+		LastRefreshSuccess: oas.OptNilInt64{Null: true},
+	}
+	if !collection.LastOffchainMetaRefreshTry.IsZero() {
+		status.LastRefreshTry.SetTo(collection.LastOffchainMetaRefreshTry.Unix())
+	}
+	if !collection.LastOffchainMetaRefreshSuccess.IsZero() {
+		status.LastRefreshSuccess.SetTo(collection.LastOffchainMetaRefreshSuccess.Unix())
+	}
+	return status
 }
 
 func (h *Handler) convertNftHistory(ctx context.Context, account tongo.AccountID, traceIDs []tongo.Bits256, acceptLanguage oas.OptString) ([]oas.AccountEvent, int64, error) {

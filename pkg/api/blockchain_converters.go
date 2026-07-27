@@ -130,7 +130,7 @@ func convertReducedBlock(block core.ReducedBlock) oas.ReducedBlock {
 	return converted
 }
 
-func convertTransaction(t core.Transaction, accountInterfaces []abi.ContractInterface, book addressBook) oas.Transaction {
+func (h *Handler) convertTransaction(t core.Transaction, accountInterfaces []abi.ContractInterface, book addressBook) oas.Transaction {
 	tx := oas.Transaction{
 		Hash:            t.Hash.Hex(),
 		Lt:              int64(t.Lt),
@@ -148,6 +148,10 @@ func convertTransaction(t core.Transaction, accountInterfaces []abi.ContractInte
 		Aborted:         t.Aborted,
 		Destroyed:       t.Destroyed,
 		Raw:             hex.EncodeToString(t.Raw),
+	}
+	// A transaction originated from a blacklisted (scam) account is itself scam.
+	if t.InMsg != nil && t.InMsg.Source != nil && h.spamFilter.AccountTrust(*t.InMsg.Source) == core.TrustBlacklist {
+		tx.Account.IsScam = true
 	}
 	if t.PrevTransLt != 0 {
 		tx.PrevTransLt.Value = int64(t.PrevTransLt)
@@ -651,9 +655,11 @@ func convertJettonBridgeParams(logger *zap.Logger, cfg tlb.JettonBridgeParams) o
 			Prices: oas.NewOptJettonBridgePrices(oas.JettonBridgePrices{
 				BridgeBurnFee:           int64(cfg.JettonBridgeParamsV1.Prices.BridgeBurnFee),
 				BridgeMintFee:           int64(cfg.JettonBridgeParamsV1.Prices.BridgeMintFee),
-				WalletMinTonsForStorage: int64(cfg.JettonBridgeParamsV1.Prices.WalletMinTonsForStorage),
+				WalletMinTonsForStorage: oas.OptInt64{Set: true, Value: int64(cfg.JettonBridgeParamsV1.Prices.WalletMinTonsForStorage)},
+				WalletMinGramForStorage: int64(cfg.JettonBridgeParamsV1.Prices.WalletMinTonsForStorage),
 				WalletGasConsumption:    int64(cfg.JettonBridgeParamsV1.Prices.WalletGasConsumption),
-				MinterMinTonsForStorage: int64(cfg.JettonBridgeParamsV1.Prices.MinterMinTonsForStorage),
+				MinterMinTonsForStorage: oas.OptInt64{Set: true, Value: int64(cfg.JettonBridgeParamsV1.Prices.MinterMinTonsForStorage)},
+				MinterMinGramForStorage: int64(cfg.JettonBridgeParamsV1.Prices.MinterMinTonsForStorage),
 				DiscoverGasConsumption:  int64(cfg.JettonBridgeParamsV1.Prices.DiscoverGasConsumption),
 			}),
 		}
@@ -933,7 +939,7 @@ func convertActionPhaseResultCode(code int32) *string {
 		34:  "Unsupported action",
 		35:  "Invalid Source address",
 		36:  "Invalid Destination address",
-		37:  "Insufficient TON",
+		37:  "Insufficient Gram",
 		38:  "Insufficient extra-currencies",
 		40:  "Insufficient funds",
 		43:  "Maximum cells/tree depth exceeded",

@@ -1357,6 +1357,72 @@ func decodeGetAccountParams(args [1]string, argsEscaped bool, r *http.Request) (
 	return params, nil
 }
 
+// GetAccountDefiAssetsParams is parameters of getAccountDefiAssets operation.
+type GetAccountDefiAssetsParams struct {
+	// Account ID.
+	AccountID string
+}
+
+func unpackGetAccountDefiAssetsParams(packed middleware.Parameters) (params GetAccountDefiAssetsParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "account_id",
+			In:   "path",
+		}
+		params.AccountID = packed[key].(string)
+	}
+	return params
+}
+
+func decodeGetAccountDefiAssetsParams(args [1]string, argsEscaped bool, r *http.Request) (params GetAccountDefiAssetsParams, _ error) {
+	// Decode path: account_id.
+	if err := func() error {
+		param := args[0]
+		if argsEscaped {
+			unescaped, err := url.PathUnescape(args[0])
+			if err != nil {
+				return errors.Wrap(err, "unescape path")
+			}
+			param = unescaped
+		}
+		if len(param) > 0 {
+			d := uri.NewPathDecoder(uri.PathDecoderConfig{
+				Param:   "account_id",
+				Value:   param,
+				Style:   uri.PathStyleSimple,
+				Explode: false,
+			})
+
+			if err := func() error {
+				val, err := d.DecodeValue()
+				if err != nil {
+					return err
+				}
+
+				c, err := conv.ToString(val)
+				if err != nil {
+					return err
+				}
+
+				params.AccountID = c
+				return nil
+			}(); err != nil {
+				return err
+			}
+		} else {
+			return validate.ErrFieldRequired
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "account_id",
+			In:   "path",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // GetAccountDiffParams is parameters of getAccountDiff operation.
 type GetAccountDiffParams struct {
 	// Account ID.
@@ -2998,7 +3064,7 @@ type GetAccountJettonBalanceParams struct {
 	AccountID string
 	// Jetton ID.
 	JettonID string
-	// Accept ton and all possible fiat currencies, separated by commas.
+	// Accept gram and all possible fiat currencies, separated by commas.
 	Currencies []string `json:",omitempty"`
 	// Comma separated list supported extensions.
 	SupportedExtensions []string `json:",omitempty"`
@@ -3667,7 +3733,7 @@ func decodeGetAccountJettonHistoryByIDParams(args [2]string, argsEscaped bool, r
 type GetAccountJettonsBalancesParams struct {
 	// Account ID.
 	AccountID string
-	// Accept ton and all possible fiat currencies, separated by commas.
+	// Accept gram and all possible fiat currencies, separated by commas.
 	Currencies []string `json:",omitempty"`
 	// Comma separated list supported extensions.
 	SupportedExtensions []string `json:",omitempty"`
@@ -4491,7 +4557,7 @@ type GetAccountNftItemsParams struct {
 	Collection OptString `json:",omitempty,omitzero"`
 	Limit      OptInt    `json:",omitempty,omitzero"`
 	Offset     OptInt    `json:",omitempty,omitzero"`
-	// Selling nft items in ton implemented usually via transfer items to special selling account. This
+	// Selling nft items in TON implemented usually via transfer items to special selling account. This
 	// option enables including items which owned not directly.
 	IndirectOwnership OptBool `json:",omitempty,omitzero"`
 }
@@ -8610,6 +8676,73 @@ func decodeGetLibraryByHashParams(args [1]string, argsEscaped bool, r *http.Requ
 	return params, nil
 }
 
+// GetMigrationWalletsParams is parameters of getMigrationWallets operation.
+type GetMigrationWalletsParams struct {
+	// Accept gram and all possible fiat currencies, separated by commas.
+	Currencies []string `json:",omitempty"`
+}
+
+func unpackGetMigrationWalletsParams(packed middleware.Parameters) (params GetMigrationWalletsParams) {
+	{
+		key := middleware.ParameterKey{
+			Name: "currencies",
+			In:   "query",
+		}
+		if v, ok := packed[key]; ok {
+			params.Currencies = v.([]string)
+		}
+	}
+	return params
+}
+
+func decodeGetMigrationWalletsParams(args [0]string, argsEscaped bool, r *http.Request) (params GetMigrationWalletsParams, _ error) {
+	q := uri.NewQueryDecoder(r.URL.Query())
+	// Decode query: currencies.
+	if err := func() error {
+		cfg := uri.QueryParameterDecodingConfig{
+			Name:    "currencies",
+			Style:   uri.QueryStyleForm,
+			Explode: false,
+		}
+
+		if err := q.HasParam(cfg); err == nil {
+			if err := q.DecodeParam(cfg, func(d uri.Decoder) error {
+				return d.DecodeArray(func(d uri.Decoder) error {
+					var paramsDotCurrenciesVal string
+					if err := func() error {
+						val, err := d.DecodeValue()
+						if err != nil {
+							return err
+						}
+
+						c, err := conv.ToString(val)
+						if err != nil {
+							return err
+						}
+
+						paramsDotCurrenciesVal = c
+						return nil
+					}(); err != nil {
+						return err
+					}
+					params.Currencies = append(params.Currencies, paramsDotCurrenciesVal)
+					return nil
+				})
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}(); err != nil {
+		return params, &ogenerrors.DecodeParamError{
+			Name: "currencies",
+			In:   "query",
+			Err:  err,
+		}
+	}
+	return params, nil
+}
+
 // GetMultisigAccountParams is parameters of getMultisigAccount operation.
 type GetMultisigAccountParams struct {
 	// Account ID.
@@ -9639,9 +9772,9 @@ func decodeGetPurchaseHistoryParams(args [1]string, argsEscaped bool, r *http.Re
 
 // GetRatesParams is parameters of getRates operation.
 type GetRatesParams struct {
-	// Accept ton and jetton master addresses, separated by commas.
+	// Accept gram and jetton master addresses, separated by commas.
 	Tokens []string `json:",omitempty"`
-	// Accept ton and all possible fiat currencies, separated by commas.
+	// Accept gram and all possible fiat currencies, separated by commas.
 	Currencies []string `json:",omitempty"`
 }
 

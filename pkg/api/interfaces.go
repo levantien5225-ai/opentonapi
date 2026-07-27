@@ -22,6 +22,7 @@ import (
 	"github.com/tonkeeper/opentonapi/pkg/blockchain"
 	"github.com/tonkeeper/opentonapi/pkg/cache"
 	"github.com/tonkeeper/opentonapi/pkg/core"
+	"github.com/tonkeeper/opentonapi/pkg/defi"
 	"github.com/tonkeeper/opentonapi/pkg/rates"
 )
 
@@ -80,6 +81,7 @@ type storage interface {
 	FindAllDomainsResolvedToAddress(ctx context.Context, a tongo.AccountID, collections map[tongo.AccountID]string) ([]string, error)
 
 	GetJettonWalletsByOwnerAddress(ctx context.Context, address tongo.AccountID, jetton *tongo.AccountID, isJettonMaster bool, mintless bool, limit, offset int) ([]core.JettonWallet, error)
+	GetJettonWalletsByOwnerAddresses(ctx context.Context, owners []tongo.AccountID, mintless bool) ([]core.JettonWallet, error)
 	GetJettonsHoldersCount(ctx context.Context, accounts []tongo.AccountID) (map[tongo.AccountID]int32, error)
 	GetJettonHolders(ctx context.Context, jettonMaster tongo.AccountID, limit, offset int) ([]core.JettonHolder, error)
 	GetJettonMasterMetadata(ctx context.Context, master tongo.AccountID) (tongo.JettonMetadata, error)
@@ -206,8 +208,9 @@ type SpamFilter interface {
 	GetEventsScamData(ctx context.Context, ids []string) (map[string]bool, error)
 	JettonTrust(address tongo.AccountID, symbol, name, image string) core.TrustType
 	AccountTrust(address tongo.AccountID) core.TrustType
+	HasBlacklistedComment(values ...string) bool
 	TonDomainTrust(domain string) core.TrustType
-	NftTrust(address tongo.AccountID, collection *ton.AccountID, description, image string) core.TrustType
+	NftTrust(address tongo.AccountID, collection, owner, collectionOwner *ton.AccountID, name, description, image, collectionName, collectionDescription string) core.TrustType
 	GetNftsScamData(ctx context.Context, addresses []ton.AccountID) (map[ton.AccountID]core.TrustType, error)
 }
 
@@ -215,8 +218,22 @@ type verifierSource interface {
 	GetAccountSource(accountID ton.AccountID) (verifier.Source, error)
 }
 
+// defiAssetsSource collects an account's positions across defi protocols (staking pools,
+// lending markets, etc). The actual protocol integrations live outside opentonapi.
+type defiAssetsSource interface {
+	Assets(ctx context.Context, accountID ton.AccountID) []defi.Asset
+}
+
+// collectionMeta bundles a collection's metadata with its owner address so the
+// owner is available to callers without an extra storage lookup. The owner is
+// already returned by the same query that fetches the metadata.
+type collectionMeta struct {
+	tep64.Metadata
+	Owner *tongo.AccountID
+}
+
 type metadataCache struct {
-	collectionsCache cache.Cache[tongo.AccountID, tep64.Metadata]
+	collectionsCache cache.Cache[tongo.AccountID, collectionMeta]
 	jettonsCache     cache.Cache[tongo.AccountID, tep64.Metadata]
 	storage          interface {
 		GetJettonMasterMetadata(ctx context.Context, master tongo.AccountID) (tep64.Metadata, error)

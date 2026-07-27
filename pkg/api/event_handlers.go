@@ -12,9 +12,11 @@ import (
 	"sync"
 	"time"
 
+	"slices"
+
 	"github.com/tonkeeper/opentonapi/internal/g"
+	"github.com/tonkeeper/tongo/boc"
 	"go.uber.org/zap"
-	"golang.org/x/exp/slices"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -30,6 +32,7 @@ import (
 	"github.com/tonkeeper/tongo/ton"
 	"github.com/tonkeeper/tongo/tontest"
 	"github.com/tonkeeper/tongo/txemulator"
+	tongoWallet "github.com/tonkeeper/tongo/wallet"
 )
 
 var (
@@ -42,6 +45,11 @@ var (
 		Name: "tonapi_send_message_counter",
 		Help: "The total number of messages received by /v2/blockchain/message endpoint",
 	})
+	sendMessageDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "tonapi_send_message_duration",
+		Help:    "Duration of /v2/blockchain/message requests by error reason",
+		Buckets: prometheus.DefBuckets,
+	}, []string{"error_reason"})
 	savedEmulatedTraces = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "saved_emulated_traces",
 	}, []string{"status"})
@@ -71,10 +79,18 @@ func decodeMessage(s string) (*decodedMessage, error) {
 }
 
 func (h *Handler) SendBlockchainMessage(ctx context.Context, request *oas.SendBlockchainMessageReq) error {
+	start := time.Now()
+	errorReason := "none"
+	defer func() {
+		sendMessageDuration.WithLabelValues(errorReason).Observe(time.Since(start).Seconds())
+	}()
+
 	if h.msgSender == nil {
+		errorReason = "msg_sender_not_configured"
 		return toError(http.StatusBadRequest, fmt.Errorf("msg sender is not configured"))
 	}
 	if !request.Boc.IsSet() && len(request.Batch) == 0 {
+		errorReason = "boc_not_found"
 		return toError(http.StatusBadRequest, fmt.Errorf("boc not found"))
 	}
 	var meta map[string]string
@@ -84,10 +100,12 @@ func (h *Handler) SendBlockchainMessage(ctx context.Context, request *oas.SendBl
 	if request.Boc.IsSet() {
 		m, err := decodeMessage(request.Boc.Value)
 		if err != nil {
+			errorReason = "invalid_boc"
 			return err
 		}
 		checksum := sha256.Sum256(m.payload)
 		if _, prs := h.blacklistedBocCache.Get(checksum); prs {
+			errorReason = "duplicate_message"
 			return toError(http.StatusBadRequest, fmt.Errorf("duplicate message"))
 		}
 		msgCopy := blockchain.ExtInMsgCopy{
@@ -100,9 +118,11 @@ func (h *Handler) SendBlockchainMessage(ctx context.Context, request *oas.SendBl
 		if err := h.msgSender.SendMessage(ctx, msgCopy); err != nil {
 			if strings.Contains(err.Error(), "cannot apply external message to current state") {
 				h.blacklistedBocCache.Set(checksum, struct{}{}, cache.WithExpiration(time.Minute))
+				errorReason = "cannot_apply_external_message"
 				return toError(http.StatusNotAcceptable, err)
 			}
 			sentry.Send("sending message", sentry.SentryInfoData{"payload": request.Boc}, sentry.LevelError)
+			errorReason = "send_message_error"
 			return toError(http.StatusInternalServerError, err)
 		}
 		h.blacklistedBocCache.Set(checksum, struct{}{}, cache.WithExpiration(time.Minute))
@@ -112,6 +132,7 @@ func (h *Handler) SendBlockchainMessage(ctx context.Context, request *oas.SendBl
 	for _, msgBoc := range request.Batch {
 		m, err := decodeMessage(msgBoc)
 		if err != nil {
+			errorReason = "invalid_boc"
 			return err
 		}
 		msgCopy := blockchain.ExtInMsgCopy{
@@ -179,7 +200,7 @@ func (h *Handler) GetTrace(ctx context.Context, params oas.GetTraceParams) (*oas
 			trace = traceEmulated
 		}
 	}
-	convertedTrace := convertTrace(trace, h.addressBook)
+	convertedTrace := h.convertTrace(trace, h.addressBook)
 	if emulated {
 		setRecursiveEmulated(&convertedTrace)
 	}
@@ -238,7 +259,7 @@ func (h *Handler) GetEvent(ctx context.Context, params oas.GetEventParams) (*oas
 	if err != nil {
 		h.logger.Warn("error getting events spam data", zap.Error(err))
 	}
-	event.IsScam = event.IsScam || isBannedTraces[traceID.Hex()]
+	event.IsScam = h.applyTraceBan(event.IsScam, isBannedTraces[traceID.Hex()], trace.Account)
 	if emulated {
 		event.InProgress = true
 	}
@@ -279,23 +300,32 @@ func (h *Handler) GetAccountEvents(ctx context.Context, params oas.GetAccountEve
 	if len(traceIDs) > 0 {
 		lastLT = traceIDs[len(traceIDs)-1].Lt
 	}
+	// initiatorByEvent maps each event ID to its trace initiator so the banned-trace
+	// override can respect the account whitelist (see applyTraceBan).
+	initiatorByEvent := make(map[string]tongo.AccountID, len(traceIDs))
 	if h.parallelTraceProcessing {
 		// Parallel mode: trades latency for CPU density.
 		// Disable via PARALLEL_TRACE_PROCESSING=false under DDoS.
 		results := make([]oas.AccountEvent, len(traceIDs))
+		initiators := make([]tongo.AccountID, len(traceIDs))
 		var traceWg sync.WaitGroup
 		for i, traceID := range traceIDs {
 			traceWg.Add(1)
 			go func(idx int, tid core.TraceID) {
 				defer traceWg.Done()
-				results[idx] = h.processTrace(ctx, account.ID, tid, params.AcceptLanguage, params.SubjectOnly.Value)
+				results[idx], initiators[idx] = h.processTrace(ctx, account.ID, tid, params.AcceptLanguage, params.SubjectOnly.Value)
 			}(i, traceID)
 		}
 		traceWg.Wait()
 		events = append(events, results...)
+		for i := range results {
+			initiatorByEvent[results[i].EventID] = initiators[i]
+		}
 	} else {
 		for _, traceID := range traceIDs {
-			events = append(events, h.processTrace(ctx, account.ID, traceID, params.AcceptLanguage, params.SubjectOnly.Value))
+			event, initiator := h.processTrace(ctx, account.ID, traceID, params.AcceptLanguage, params.SubjectOnly.Value)
+			events = append(events, event)
+			initiatorByEvent[event.EventID] = initiator
 		}
 	}
 
@@ -353,6 +383,7 @@ func (h *Handler) GetAccountEvents(ctx context.Context, params oas.GetAccountEve
 			}
 			event.InProgress = true
 			event.EventID = hash.Hex()
+			initiatorByEvent[event.EventID] = trace.Account
 			events = slices.Insert(events, 0, event)
 			if len(events) > params.Limit {
 				events = events[:params.Limit]
@@ -382,29 +413,33 @@ func (h *Handler) GetAccountEvents(ctx context.Context, params oas.GetAccountEve
 		}
 	}
 	for i := range events {
-		events[i].IsScam = events[i].IsScam || isBannedTraces[events[i].EventID]
+		events[i].IsScam = h.applyTraceBan(events[i].IsScam, isBannedTraces[events[i].EventID], initiatorByEvent[events[i].EventID])
 	}
 	return &oas.AccountEvents{Events: events, NextFrom: int64(lastLT)}, nil
 }
 
-func (h *Handler) processTrace(ctx context.Context, account tongo.AccountID, tid core.TraceID, lang oas.OptString, subjectOnly bool) oas.AccountEvent {
+// processTrace returns the account event and the trace initiator (root account),
+// which the caller needs to let a whitelisted initiator override a DB trace ban.
+// On fallbacks the trace isn't available, so a zero AccountID is returned, which
+// leaves any ban in place (TrustNone).
+func (h *Handler) processTrace(ctx context.Context, account tongo.AccountID, tid core.TraceID, lang oas.OptString, subjectOnly bool) (oas.AccountEvent, tongo.AccountID) {
 	trace, err := h.storage.GetTrace(ctx, tid.Hash)
 	if errors.Is(err, core.ErrTraceIsTooLong) {
-		return h.toAccountEventForLongTrace(account, tid)
+		return h.toAccountEventForLongTrace(account, tid), tongo.AccountID{}
 	}
 	if err != nil {
-		return h.toUnknownAccountEvent(account, tid)
+		return h.toUnknownAccountEvent(account, tid), tongo.AccountID{}
 	}
 	actions, err := bath.FindActions(ctx, trace, bath.ForAccount(account), bath.WithInformationSource(h.storage), bath.WithAddressBook(h.addressBook))
 	if err != nil {
-		return h.toUnknownAccountEvent(account, tid)
+		return h.toUnknownAccountEvent(account, tid), tongo.AccountID{}
 	}
 	result := bath.EnrichWithIntentions(trace, actions)
 	converted, err := h.toAccountEvent(ctx, account, trace, result, lang, subjectOnly)
 	if err != nil {
-		return h.toUnknownAccountEvent(account, tid)
+		return h.toUnknownAccountEvent(account, tid), tongo.AccountID{}
 	}
-	return converted
+	return converted, trace.Account
 }
 
 func (h *Handler) GetAccountEvent(ctx context.Context, params oas.GetAccountEventParams) (*oas.AccountEvent, error) {
@@ -449,11 +484,20 @@ func (h *Handler) GetAccountEvent(ctx context.Context, params oas.GetAccountEven
 		return nil, toError(http.StatusInternalServerError, err)
 	}
 	wg.Wait()
-	event.IsScam = event.IsScam || isBannedTraces[traceID.Hex()]
+	event.IsScam = h.applyTraceBan(event.IsScam, isBannedTraces[traceID.Hex()], trace.Account)
 	if emulated {
 		event.InProgress = true
 	}
 	return &event, nil
+}
+
+func (h *Handler) applyTraceBan(heuristicScam, banned bool, initiator tongo.AccountID) bool {
+	switch h.spamFilter.AccountTrust(initiator) {
+	case core.TrustWhitelist, core.TrustGraylist:
+		return false
+	default:
+		return heuristicScam || banned
+	}
 }
 
 func toProperEmulationError(err error) error {
@@ -640,7 +684,7 @@ func (h *Handler) EmulateMessageToTrace(ctx context.Context, request *oas.Emulat
 		savedEmulatedTraces.WithLabelValues("restored").Inc()
 	}
 
-	t := convertTrace(trace, h.addressBook)
+	t := h.convertTrace(trace, h.addressBook)
 	return &t, nil
 }
 
@@ -659,7 +703,7 @@ func extractDestinationWallet(message tlb.Message) (*ton.AccountID, error) {
 }
 
 func prepareAccountState(accountID tongo.AccountID, state tlb.ShardAccount, startBalance int64) (tlb.ShardAccount, error) {
-	if state.Account.Status() == tlb.AccountActive {
+	if state.Account.SumType == "Account" && state.Account.Account.Storage.State.SumType == "AccountActive" {
 		state.Account.Account.Storage.Balance.Grams = tlb.Grams(startBalance)
 		state.Account.Account.StorageStat.StorageExtra.SumType = "StorageExtraNone"
 		return state, nil
@@ -704,20 +748,29 @@ func (h *Handler) EmulateMessageToWallet(ctx context.Context, request *oas.Emula
 	if err != nil {
 		return nil, toError(http.StatusBadRequest, err)
 	}
-	var code []byte
-	if account, err := h.storage.GetRawAccount(ctx, *walletAddress); err == nil && len(account.Code) > 0 {
-		code = account.Code
-	} else if m.Init.Exists && m.Init.Value.Value.Code.Exists {
-		code, err = m.Init.Value.Value.Code.Value.Value.ToBoc()
+	if request.AddressOverride.IsSet() {
+		addr, err := tongo.ParseAddress(request.AddressOverride.Value)
 		if err != nil {
 			return nil, toError(http.StatusBadRequest, err)
 		}
-	} else if err == nil {
+		walletAddress = &addr.ID
+		m.Info.ExtInMsgInfo.Dest = addr.ID.ToMsgAddress()
+	}
+	var code boc.Cell
+	if account, err := h.storage.GetRawAccount(ctx, *walletAddress); err == nil && len(account.Code) > 0 {
+		codeP, err := boc.DeserializeSingleRootBoc(account.Code)
+		if err != nil {
+			return nil, toError(http.StatusBadRequest, err)
+		}
+		code = *codeP
+	} else if m.Init.Exists && m.Init.Value.Value.Code.Exists {
+		code = m.Init.Value.Value.Code.Value.Value
+	} else if err == nil || errors.Is(err, core.ErrEntityNotFound) {
 		return nil, toError(http.StatusBadRequest, fmt.Errorf("code not found and message doesn't have init"))
 	} else {
 		return nil, toError(http.StatusInternalServerError, fmt.Errorf("account: %s GetRawAccount err: %w", walletAddress.ToRaw(), err))
 	}
-	walletVersion, err := wallet.GetVersionByCode(code)
+	walletVersion, err := tongoWallet.GetVersionByCode(code)
 	if err != nil {
 		return nil, toError(http.StatusBadRequest, err)
 	}
@@ -784,7 +837,7 @@ func (h *Handler) EmulateMessageToWallet(ctx context.Context, request *oas.Emula
 	} else {
 		savedEmulatedTraces.WithLabelValues("restored").Inc()
 	}
-	t := convertTrace(trace, h.addressBook)
+	t := h.convertTrace(trace, h.addressBook)
 	actions, err := bath.FindActions(ctx, trace, bath.ForAccount(*walletAddress), bath.WithInformationSource(h.storage), bath.WithAddressBook(h.addressBook))
 	if err != nil {
 		return nil, toError(http.StatusInternalServerError, fmt.Errorf("account: %s FindActions err: %w", walletAddress.ToRaw(), err))

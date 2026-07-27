@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,6 +32,16 @@ type ErrorWithExtendedCode struct {
 	Code         int
 	Message      string
 	ExtendedCode references.ExtendedCode
+	// Details, when set, exposes the required/available TON amounts (in nanotons)
+	// as structured fields so clients don't have to parse them out of Message.
+	// Clients switch on ExtendedCode to decide how to interpret it.
+	Details *InsufficientFunds
+}
+
+// InsufficientFunds carries the gas shortfall of a failed request.
+type InsufficientFunds struct {
+	Required  int64
+	Available int64
 }
 
 func (e ErrorWithExtendedCode) Error() string {
@@ -52,14 +64,25 @@ func extendedCode(code references.ExtendedCode) oas.OptInt64 {
 }
 
 func toError(defaultCode int, err error) *oas.ErrorStatusCode {
+	var res *oas.ErrorStatusCode
+	if errors.As(err, &res) {
+		return res
+	}
 	var e ErrorWithExtendedCode
 	if errors.As(err, &e) {
+		response := oas.Error{
+			Error:     censor(e.Message),
+			ErrorCode: extendedCode(e.ExtendedCode),
+		}
+		if e.Details != nil {
+			response.Details = oas.NewOptInsufficientFunds(oas.InsufficientFunds{
+				Required:  e.Details.Required,
+				Available: e.Details.Available,
+			})
+		}
 		return &oas.ErrorStatusCode{
 			StatusCode: e.Code,
-			Response: oas.Error{
-				Error:     censor(e.Message),
-				ErrorCode: extendedCode(e.ExtendedCode),
-			},
+			Response:   response,
 		}
 	}
 	if s, ok := status.FromError(err); ok {
@@ -391,4 +414,27 @@ func (h *Handler) convertMultisigOrder(ctx context.Context, order core.MultisigO
 		Risk:               oasRisk,
 		ChangingParameters: cp,
 	}, nil
+}
+
+func convertStateInit(si tlb.StateInit) (oas.OptString, error) {
+	cell := boc.NewCell()
+	if err := tlb.Marshal(cell, si); err != nil {
+		return oas.OptString{}, fmt.Errorf("marshalling stat init: %v", err)
+	}
+	b64, err := cell.ToBocBase64()
+	if err != nil {
+		return oas.OptString{}, fmt.Errorf("base64 encoding failed: %v", err)
+	}
+	return oas.NewOptString(b64), nil
+}
+
+func requirePublicKey(pk oas.OptString) (ed25519.PublicKey, error) {
+	if !pk.IsSet() || pk.Value == "" {
+		return nil, errors.New("public_key is empty")
+	}
+	if decoded, err := hex.DecodeString(pk.Value); err != nil {
+		return nil, fmt.Errorf("public_key is not valid hex: %v", err)
+	} else {
+		return decoded, nil
+	}
 }

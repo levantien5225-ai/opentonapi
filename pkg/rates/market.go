@@ -11,16 +11,18 @@ import (
 	"math"
 	"math/big"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"time"
+
+	"log/slog"
+	"maps"
 
 	"github.com/tonkeeper/opentonapi/pkg/references"
 	"github.com/tonkeeper/tongo/boc"
 	"github.com/tonkeeper/tongo/tlb"
 	"github.com/tonkeeper/tongo/ton"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slog"
 )
 
 // List of services used to calculate various prices
@@ -53,7 +55,7 @@ const (
 )
 
 // defaultMinReserve specifies the minimum jetton reserves (equivalent to TON) for which prices can be determined
-const defaultMinReserve = float64(100 * ton.OneTON)
+const defaultMinReserve = float64(100 * ton.OneGRAM)
 
 // defaultMinHoldersCount minimum number of holders threshold for jettons
 const defaultMinHoldersCount = 100
@@ -88,10 +90,11 @@ type LpAsset struct {
 }
 
 type Market struct {
-	ID       int64
-	Name     string // Name of the service used for price calculation
-	UsdPrice float64
-	URL      string
+	ID          int64
+	Name        string // Name of the service used for price calculation
+	UsdPrice    float64
+	URL         string
+	FallbackURL string
 	// Converter for calculating the coin from market to USD price
 	MarketPriceConverter func(respBody []byte) (float64, error)
 	// Converter for calculating fiat prices
@@ -101,14 +104,15 @@ type Market struct {
 	DateUpdate            time.Time
 }
 
-// GetCurrentMarketsTonPrice shows the TON to USD price on different markets
-func (m *Mock) GetCurrentMarketsTonPrice() ([]Market, error) {
+// GetCurrentMarketsGramPrice shows the GRAM to USD price on different markets
+func (m *Mock) GetCurrentMarketsGramPrice() ([]Market, error) {
 	now := time.Now()
 	markets := []Market{
 		{
 			ID:                   1,
 			Name:                 bitfinex,
 			URL:                  "https://api-pub.bitfinex.com/v2/ticker/tTONUSD",
+			FallbackURL:          "https://api-pub.bitfinex.com/v2/ticker/tGRAMUSD",
 			MarketPriceConverter: convertBitFinexResponse,
 			DateUpdate:           now,
 		},
@@ -116,6 +120,7 @@ func (m *Mock) GetCurrentMarketsTonPrice() ([]Market, error) {
 			ID:                   2,
 			Name:                 gateio,
 			URL:                  "https://api.gateio.ws/api/v4/spot/tickers?currency_pair=TON_USDT",
+			FallbackURL:          "https://api.gateio.ws/api/v4/spot/tickers?currency_pair=GRAM_USDT",
 			MarketPriceConverter: convertGateIOResponse,
 			DateUpdate:           now,
 		},
@@ -123,6 +128,7 @@ func (m *Mock) GetCurrentMarketsTonPrice() ([]Market, error) {
 			ID:                   3,
 			Name:                 bybit,
 			URL:                  "https://api.bybit.com/v5/market/tickers?category=spot&symbol=TONUSDT",
+			FallbackURL:          "https://api.bybit.com/v5/market/tickers?category=spot&symbol=GRAMUSDT",
 			MarketPriceConverter: convertBybitResponse,
 			DateUpdate:           now,
 		},
@@ -130,6 +136,7 @@ func (m *Mock) GetCurrentMarketsTonPrice() ([]Market, error) {
 			ID:                   4,
 			Name:                 kucoin,
 			URL:                  "https://www.kucoin.com/_api/trade-front/market/getSymbolTick?symbols=TON-USDT",
+			FallbackURL:          "https://www.kucoin.com/_api/trade-front/market/getSymbolTick?symbols=GRAM-USDT",
 			MarketPriceConverter: convertKuCoinResponse,
 			DateUpdate:           now,
 		},
@@ -137,6 +144,7 @@ func (m *Mock) GetCurrentMarketsTonPrice() ([]Market, error) {
 			ID:                   5,
 			Name:                 okx,
 			URL:                  "https://www.okx.com/api/v5/market/ticker?instId=TON-USDT",
+			FallbackURL:          "https://www.okx.com/api/v5/market/ticker?instId=GRAM-USDT",
 			MarketPriceConverter: convertOKXResponse,
 			DateUpdate:           now,
 		},
@@ -144,25 +152,34 @@ func (m *Mock) GetCurrentMarketsTonPrice() ([]Market, error) {
 			ID:                   6,
 			Name:                 huobi,
 			URL:                  "https://api.huobi.pro/market/trade?symbol=tonusdt",
+			FallbackURL:          "https://api.huobi.pro/market/trade?symbol=gramusdt",
 			MarketPriceConverter: convertHuobiResponse,
 			DateUpdate:           now,
 		},
 	}
 	for idx, market := range markets {
-		headers := http.Header{"Content-Type": {"application/json"}}
-		respBody, err := sendRequest(market.URL, "", headers)
-		if err != nil {
-			slog.Error("[GetCurrentMarketsTonPrice] failed to send request", slog.Any("error", err))
-			errorsCounter.WithLabelValues(market.Name).Inc()
-			continue
+		var err error
+		var respBody []byte
+		for _, url := range []string{market.URL, market.FallbackURL} {
+			headers := http.Header{"Content-Type": {"application/json"}}
+			respBody, err = sendRequest(url, "", headers)
+			if err != nil {
+				err = fmt.Errorf("request failed: %v", err)
+				continue
+			}
+			market.UsdPrice, err = market.MarketPriceConverter(respBody)
+			if err != nil {
+				err = fmt.Errorf("conversion failed: %v", err)
+				continue
+			}
+			if market.UsdPrice == 0 {
+				continue
+			}
+			break
 		}
-		market.UsdPrice, err = market.MarketPriceConverter(respBody)
 		if err != nil {
-			slog.Error("[GetCurrentMarketsTonPrice] failed to convert response", slog.Any("error", err))
+			slog.Error("[GetCurrentMarketsGramPrice] failed", slog.Any("error", err))
 			errorsCounter.WithLabelValues(market.Name).Inc()
-			continue
-		}
-		if market.UsdPrice == 0 {
 			continue
 		}
 		markets[idx] = market
@@ -224,13 +241,14 @@ func (m *Mock) GetCurrentMarketsTrxPrice() ([]Market, error) {
 		headers := http.Header{"Content-Type": {"application/json"}}
 		respBody, err := sendRequest(market.URL, "", headers)
 		if err != nil {
-			slog.Error("[GetCurrentMarketsTonPrice] failed to send request", slog.Any("error", err))
+			slog.Error("[GetCurrentMarketsTrxPrice] failed to send request", slog.Any("error", err))
+
 			errorsCounter.WithLabelValues(market.Name).Inc()
 			continue
 		}
 		market.UsdPrice, err = market.MarketPriceConverter(respBody)
 		if err != nil {
-			slog.Error("[GetCurrentMarketsTonPrice] failed to convert response", slog.Any("error", err))
+			slog.Error("[GetCurrentMarketsTrxPrice] failed to convert response", slog.Any("error", err))
 			errorsCounter.WithLabelValues(market.Name).Inc()
 			continue
 		}
@@ -375,7 +393,7 @@ func convertHuobiResponse(respBody []byte) (float64, error) {
 }
 
 // getFiatPrices shows the exchange rates of various fiats to USD on different markets
-func getFiatPrices(tonPrice float64, additionalPrices map[string]float64) map[string]float64 {
+func getFiatPrices(gramPrice float64, additionalPrices map[string]float64) map[string]float64 {
 	markets := []Market{
 		{
 			Name:               coinbase,
@@ -400,13 +418,13 @@ func getFiatPrices(tonPrice float64, additionalPrices map[string]float64) map[st
 		}
 		for currency, rate := range converted {
 			if _, ok := prices[currency]; !ok && rate != 0 {
-				prices[currency] = 1 / (rate * tonPrice)
+				prices[currency] = 1 / (rate * gramPrice)
 			}
 		}
 	}
 	for currency, rate := range additionalPrices {
 		if _, ok := prices[currency]; !ok && rate != 0 {
-			prices[currency] = 1 / (rate * tonPrice)
+			prices[currency] = 1 / (rate * gramPrice)
 		}
 	}
 	return prices
@@ -695,7 +713,7 @@ func convertStonFiPoolResponse(respBody []byte) ([]Pool, []LpAsset, error) {
 		}
 		actualLpAssets[lpAsset.Account] = lpAsset
 	}
-	return actualAssets, maps.Values(actualLpAssets), nil
+	return actualAssets, slices.Collect(maps.Values(actualLpAssets)), nil
 }
 
 func convertDeDustPoolResponse(respBody []byte) ([]Pool, []LpAsset, error) {
@@ -833,7 +851,7 @@ func convertDeDustPoolResponse(respBody []byte) ([]Pool, []LpAsset, error) {
 		actualLpAssets[lpAsset.Account] = lpAsset
 	}
 
-	return actualAssets, maps.Values(actualLpAssets), nil
+	return actualAssets, slices.Collect(maps.Values(actualLpAssets)), nil
 }
 
 func convertSwapCoffeePoolResponse(respBody []byte) ([]Pool, []LpAsset, error) {
@@ -993,7 +1011,7 @@ func convertSwapCoffeePoolResponse(respBody []byte) ([]Pool, []LpAsset, error) {
 		actualLpAssets[lpAsset.Account] = lpAsset
 	}
 
-	return actualAssets, maps.Values(actualLpAssets), nil
+	return actualAssets, slices.Collect(maps.Values(actualLpAssets)), nil
 }
 
 func (m *Mock) convertBidaskPoolResponse(respBody []byte) ([]Pool, []LpAsset, error) {

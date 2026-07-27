@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"maps"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tonkeeper/opentonapi/internal/g"
@@ -19,7 +21,6 @@ import (
 	"github.com/tonkeeper/tongo/abi"
 	"github.com/tonkeeper/tongo/liteapi"
 	"go.uber.org/zap"
-	"golang.org/x/exp/maps"
 
 	"github.com/tonkeeper/opentonapi/pkg/litestorage"
 	"github.com/tonkeeper/opentonapi/pkg/pyth"
@@ -120,6 +121,10 @@ func TestFindActions(t *testing.T) {
 	// this map is a separate, because using testCases (if we want the map to be inferred)
 	//      breaks IDEA's ability to "click specific test case" perhaps in other IDE's too
 	txBlocks := map[string][]tongo.BlockID{
+		"5f55199edefad18c3e17c92cc276f6ceffe0a6ba0146dd89dbd55ae9ec3785b9": {
+			tongo.MustParseBlockID("(0,8000000000000000,84363378)"),
+			tongo.MustParseBlockID("(0,8000000000000000,84363379)"),
+		},
 		"6e4cfc51eeef38a46896a556c9faae05754b31f563592fc866207234dec5966a": {
 			tongo.MustParseBlockID("(0,8000000000000000,68194499)"),
 		},
@@ -1049,6 +1054,13 @@ func TestFindActions(t *testing.T) {
 			filenamePrefix: "ethena-withdraw-stake-request",
 		},
 		{
+			// tsUSDe transfer whose recipient side is routed through the tsUSDe master;
+			// previously reported as "failed" because the recipient bubble didn't match. See EthenaTsUSDeTransferStraw.
+			name:           "ethena tsusde transfer",
+			hash:           "5f55199edefad18c3e17c92cc276f6ceffe0a6ba0146dd89dbd55ae9ec3785b9",
+			filenamePrefix: "ethena-tsusde-transfer",
+		},
+		{
 			name:           "deposit both ton + bmTON liquidity bidask",
 			hash:           "bebf12180fa2e0a548ede0bc2aa9d3d4169eef4500f52fdff2e08238be33f6a4",
 			filenamePrefix: "deposit-both-ton-bmton-liquidity-bidask",
@@ -1224,7 +1236,7 @@ func TestFindActions(t *testing.T) {
 
 	var sharedStorage *litestorage.LiteStorage
 	if !isFocusedRun() {
-		sharedStorage = newBathTestStorage(t, cli, slices.Concat(maps.Values(txBlocks)...))
+		sharedStorage = newBathTestStorage(t, cli, slices.Concat(slices.Collect(maps.Values(txBlocks))...))
 	}
 
 	for _, c := range testCases {
@@ -1267,7 +1279,7 @@ func TestFindActions(t *testing.T) {
 				})
 				accountFlow := accountValueFlow{
 					Account: accountID.String(),
-					Ton:     flow.Ton,
+					Ton:     flow.Gram,
 					Fee:     flow.Fees,
 					Jettons: jettons,
 				}

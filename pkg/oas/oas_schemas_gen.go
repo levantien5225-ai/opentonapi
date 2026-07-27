@@ -313,8 +313,8 @@ type AccountEvent struct {
 	Lt     int64 `json:"lt"`
 	// Event trace is not finished yet. Transactions still happening.
 	InProgress bool `json:"in_progress"`
-	// Net TON change for this account not explained by actions, in nanotons: extra = final_balance -
-	// initial_balance - sum(explicit TON changes from actions). extra < 0 - implicit fee, extra > 0 -
+	// Net Gram change for this account not explained by actions, in nanograms: extra = final_balance -
+	// initial_balance - sum(explicit Gram changes from actions). extra < 0 - implicit fee, extra > 0 -
 	// refund. For UI display only.
 	Extra int64 `json:"extra"`
 	// Event completion ratio in [0,1].
@@ -740,6 +740,9 @@ type Action struct {
 	WithdrawTokenStakeRequest OptWithdrawTokenStakeRequestAction `json:"WithdrawTokenStakeRequest"`
 	LiquidityDeposit          OptLiquidityDepositAction          `json:"LiquidityDeposit"`
 	OracleRequest             OptOracleRequestAction             `json:"OracleRequest"`
+	WithdrawXTR               OptWithdrawXTRAction               `json:"WithdrawXTR"`
+	DepositXTR                OptDepositXTRAction                `json:"DepositXTR"`
+	BuyXTR                    OptBuyXTRAction                    `json:"BuyXTR"`
 	SimplePreview             ActionSimplePreview                `json:"simple_preview"`
 	BaseTransactions          []string                           `json:"base_transactions"`
 }
@@ -897,6 +900,21 @@ func (s *Action) GetLiquidityDeposit() OptLiquidityDepositAction {
 // GetOracleRequest returns the value of OracleRequest.
 func (s *Action) GetOracleRequest() OptOracleRequestAction {
 	return s.OracleRequest
+}
+
+// GetWithdrawXTR returns the value of WithdrawXTR.
+func (s *Action) GetWithdrawXTR() OptWithdrawXTRAction {
+	return s.WithdrawXTR
+}
+
+// GetDepositXTR returns the value of DepositXTR.
+func (s *Action) GetDepositXTR() OptDepositXTRAction {
+	return s.DepositXTR
+}
+
+// GetBuyXTR returns the value of BuyXTR.
+func (s *Action) GetBuyXTR() OptBuyXTRAction {
+	return s.BuyXTR
 }
 
 // GetSimplePreview returns the value of SimplePreview.
@@ -1064,6 +1082,21 @@ func (s *Action) SetOracleRequest(val OptOracleRequestAction) {
 	s.OracleRequest = val
 }
 
+// SetWithdrawXTR sets the value of WithdrawXTR.
+func (s *Action) SetWithdrawXTR(val OptWithdrawXTRAction) {
+	s.WithdrawXTR = val
+}
+
+// SetDepositXTR sets the value of DepositXTR.
+func (s *Action) SetDepositXTR(val OptDepositXTRAction) {
+	s.DepositXTR = val
+}
+
+// SetBuyXTR sets the value of BuyXTR.
+func (s *Action) SetBuyXTR(val OptBuyXTRAction) {
+	s.BuyXTR = val
+}
+
 // SetSimplePreview sets the value of SimplePreview.
 func (s *Action) SetSimplePreview(val ActionSimplePreview) {
 	s.SimplePreview = val
@@ -1163,6 +1196,8 @@ type ActionSimplePreview struct {
 	// A link to an image for this particular action.
 	ActionImage OptString `json:"action_image"`
 	Value       OptString `json:"value"`
+	// The value of this action expressed in the requested fiat currency.
+	FiatValue OptString `json:"fiat_value"`
 	// A link to an image that depicts this action's asset.
 	ValueImage OptString        `json:"value_image"`
 	Accounts   []AccountAddress `json:"accounts"`
@@ -1186,6 +1221,11 @@ func (s *ActionSimplePreview) GetActionImage() OptString {
 // GetValue returns the value of Value.
 func (s *ActionSimplePreview) GetValue() OptString {
 	return s.Value
+}
+
+// GetFiatValue returns the value of FiatValue.
+func (s *ActionSimplePreview) GetFiatValue() OptString {
+	return s.FiatValue
 }
 
 // GetValueImage returns the value of ValueImage.
@@ -1216,6 +1256,11 @@ func (s *ActionSimplePreview) SetActionImage(val OptString) {
 // SetValue sets the value of Value.
 func (s *ActionSimplePreview) SetValue(val OptString) {
 	s.Value = val
+}
+
+// SetFiatValue sets the value of FiatValue.
+func (s *ActionSimplePreview) SetFiatValue(val OptString) {
+	s.FiatValue = val
 }
 
 // SetValueImage sets the value of ValueImage.
@@ -1301,6 +1346,9 @@ const (
 	ActionTypeWithdrawTokenStakeRequest ActionType = "WithdrawTokenStakeRequest"
 	ActionTypeLiquidityDeposit          ActionType = "LiquidityDeposit"
 	ActionTypeOracleRequest             ActionType = "OracleRequest"
+	ActionTypeBuyXTR                    ActionType = "BuyXTR"
+	ActionTypeDepositXTR                ActionType = "DepositXTR"
+	ActionTypeWithdrawXTR               ActionType = "WithdrawXTR"
 	ActionTypeUnknown                   ActionType = "Unknown"
 )
 
@@ -1336,6 +1384,9 @@ func (ActionType) AllValues() []ActionType {
 		ActionTypeWithdrawTokenStakeRequest,
 		ActionTypeLiquidityDeposit,
 		ActionTypeOracleRequest,
+		ActionTypeBuyXTR,
+		ActionTypeDepositXTR,
+		ActionTypeWithdrawXTR,
 		ActionTypeUnknown,
 	}
 }
@@ -1400,6 +1451,12 @@ func (s ActionType) MarshalText() ([]byte, error) {
 	case ActionTypeLiquidityDeposit:
 		return []byte(s), nil
 	case ActionTypeOracleRequest:
+		return []byte(s), nil
+	case ActionTypeBuyXTR:
+		return []byte(s), nil
+	case ActionTypeDepositXTR:
+		return []byte(s), nil
+	case ActionTypeWithdrawXTR:
 		return []byte(s), nil
 	case ActionTypeUnknown:
 		return []byte(s), nil
@@ -1497,6 +1554,15 @@ func (s *ActionType) UnmarshalText(data []byte) error {
 		return nil
 	case ActionTypeOracleRequest:
 		*s = ActionTypeOracleRequest
+		return nil
+	case ActionTypeBuyXTR:
+		*s = ActionTypeBuyXTR
+		return nil
+	case ActionTypeDepositXTR:
+		*s = ActionTypeDepositXTR
+		return nil
+	case ActionTypeWithdrawXTR:
+		*s = ActionTypeWithdrawXTR
 		return nil
 	case ActionTypeUnknown:
 		*s = ActionTypeUnknown
@@ -2730,9 +2796,9 @@ type BlockchainConfig struct {
 	R12 OptBlockchainConfig12 `json:"12"`
 	// The cost of filing complaints about incorrect operation of validators.
 	R13 OptBlockchainConfig13 `json:"13"`
-	// The reward in nanoTons for block creation in the TON blockchain.
+	// The reward in nanoGram for block creation in the TON blockchain.
 	R14 OptBlockchainConfig14 `json:"14"`
-	// The reward in nanoTons for block creation in the TON blockchain.
+	// The reward in nanograms for block creation in the TON blockchain.
 	R15 OptBlockchainConfig15 `json:"15"`
 	// The limits on the number of validators in the TON blockchain.
 	R16 OptBlockchainConfig16 `json:"16"`
@@ -2772,7 +2838,7 @@ type BlockchainConfig struct {
 	R36 OptValidatorsSet      `json:"36"`
 	R37 OptValidatorsSet      `json:"37"`
 	// The configuration for punishment for improper behavior (non-validation). In the absence of the
-	// parameter, the default fine size is 101 TON.
+	// parameter, the default fine size is 101 Gram.
 	R40 OptBlockchainConfig40 `json:"40"`
 	// The size limits and some other characteristics of accounts and messages.
 	R43 OptBlockchainConfig43 `json:"43"`
@@ -3349,7 +3415,7 @@ func (s *BlockchainConfig13) SetCellPrice(val int64) {
 	s.CellPrice = val
 }
 
-// The reward in nanoTons for block creation in the TON blockchain.
+// The reward in nanoGram for block creation in the TON blockchain.
 type BlockchainConfig14 struct {
 	MasterchainBlockFee int64 `json:"masterchain_block_fee"`
 	BasechainBlockFee   int64 `json:"basechain_block_fee"`
@@ -3375,7 +3441,7 @@ func (s *BlockchainConfig14) SetBasechainBlockFee(val int64) {
 	s.BasechainBlockFee = val
 }
 
-// The reward in nanoTons for block creation in the TON blockchain.
+// The reward in nanograms for block creation in the TON blockchain.
 type BlockchainConfig15 struct {
 	ValidatorsElectedFor int64 `json:"validators_elected_for"`
 	ElectionsStartBefore int64 `json:"elections_start_before"`
@@ -3924,7 +3990,7 @@ func (s *BlockchainConfig31) SetFundamentalSmcAddr(val []string) {
 }
 
 // The configuration for punishment for improper behavior (non-validation). In the absence of the
-// parameter, the default fine size is 101 TON.
+// parameter, the default fine size is 101 Gram.
 type BlockchainConfig40 struct {
 	MisbehaviourPunishmentConfig MisbehaviourPunishmentConfig `json:"misbehaviour_punishment_config"`
 }
@@ -4480,6 +4546,32 @@ func (s *BouncePhaseType) UnmarshalText(data []byte) error {
 	default:
 		return errors.Errorf("invalid value: %q", data)
 	}
+}
+
+// Ref: #/components/schemas/BuyXTRAction
+type BuyXTRAction struct {
+	Recipient AccountAddress `json:"recipient"`
+	Amount    string         `json:"amount"`
+}
+
+// GetRecipient returns the value of Recipient.
+func (s *BuyXTRAction) GetRecipient() AccountAddress {
+	return s.Recipient
+}
+
+// GetAmount returns the value of Amount.
+func (s *BuyXTRAction) GetAmount() string {
+	return s.Amount
+}
+
+// SetRecipient sets the value of Recipient.
+func (s *BuyXTRAction) SetRecipient(val AccountAddress) {
+	s.Recipient = val
+}
+
+// SetAmount sets the value of Amount.
+func (s *BuyXTRAction) SetAmount(val string) {
+	s.Amount = val
 }
 
 type ChartPoints [][]float64
@@ -5169,6 +5261,349 @@ func (s *DecodedRawMessageMessage) SetDecodedBody(val jx.Raw) {
 	s.DecodedBody = val
 }
 
+// Ref: #/components/schemas/DefiAsset
+type DefiAsset struct {
+	Type DefiAssetType `json:"type"`
+	// Amount in minimal units of the locked asset.
+	Amount       string          `json:"amount"`
+	PoolAddress  OptString       `json:"pool_address"`
+	AssetAddress OptString       `json:"asset_address"`
+	DefiProvider DefiProvider    `json:"defi_provider"`
+	LockedAsset  DefiLockedAsset `json:"locked_asset"`
+}
+
+// GetType returns the value of Type.
+func (s *DefiAsset) GetType() DefiAssetType {
+	return s.Type
+}
+
+// GetAmount returns the value of Amount.
+func (s *DefiAsset) GetAmount() string {
+	return s.Amount
+}
+
+// GetPoolAddress returns the value of PoolAddress.
+func (s *DefiAsset) GetPoolAddress() OptString {
+	return s.PoolAddress
+}
+
+// GetAssetAddress returns the value of AssetAddress.
+func (s *DefiAsset) GetAssetAddress() OptString {
+	return s.AssetAddress
+}
+
+// GetDefiProvider returns the value of DefiProvider.
+func (s *DefiAsset) GetDefiProvider() DefiProvider {
+	return s.DefiProvider
+}
+
+// GetLockedAsset returns the value of LockedAsset.
+func (s *DefiAsset) GetLockedAsset() DefiLockedAsset {
+	return s.LockedAsset
+}
+
+// SetType sets the value of Type.
+func (s *DefiAsset) SetType(val DefiAssetType) {
+	s.Type = val
+}
+
+// SetAmount sets the value of Amount.
+func (s *DefiAsset) SetAmount(val string) {
+	s.Amount = val
+}
+
+// SetPoolAddress sets the value of PoolAddress.
+func (s *DefiAsset) SetPoolAddress(val OptString) {
+	s.PoolAddress = val
+}
+
+// SetAssetAddress sets the value of AssetAddress.
+func (s *DefiAsset) SetAssetAddress(val OptString) {
+	s.AssetAddress = val
+}
+
+// SetDefiProvider sets the value of DefiProvider.
+func (s *DefiAsset) SetDefiProvider(val DefiProvider) {
+	s.DefiProvider = val
+}
+
+// SetLockedAsset sets the value of LockedAsset.
+func (s *DefiAsset) SetLockedAsset(val DefiLockedAsset) {
+	s.LockedAsset = val
+}
+
+// Ref: #/components/schemas/DefiAssetType
+type DefiAssetType string
+
+const (
+	DefiAssetTypeStaking       DefiAssetType = "staking"
+	DefiAssetTypeLendingSupply DefiAssetType = "lending_supply"
+	DefiAssetTypeLendingBorrow DefiAssetType = "lending_borrow"
+	DefiAssetTypeLiquidStaking DefiAssetType = "liquid_staking"
+	DefiAssetTypeLiquidPool    DefiAssetType = "liquid_pool"
+	DefiAssetTypeYieldToken    DefiAssetType = "yield_token"
+)
+
+// AllValues returns all DefiAssetType values.
+func (DefiAssetType) AllValues() []DefiAssetType {
+	return []DefiAssetType{
+		DefiAssetTypeStaking,
+		DefiAssetTypeLendingSupply,
+		DefiAssetTypeLendingBorrow,
+		DefiAssetTypeLiquidStaking,
+		DefiAssetTypeLiquidPool,
+		DefiAssetTypeYieldToken,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s DefiAssetType) MarshalText() ([]byte, error) {
+	switch s {
+	case DefiAssetTypeStaking:
+		return []byte(s), nil
+	case DefiAssetTypeLendingSupply:
+		return []byte(s), nil
+	case DefiAssetTypeLendingBorrow:
+		return []byte(s), nil
+	case DefiAssetTypeLiquidStaking:
+		return []byte(s), nil
+	case DefiAssetTypeLiquidPool:
+		return []byte(s), nil
+	case DefiAssetTypeYieldToken:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *DefiAssetType) UnmarshalText(data []byte) error {
+	switch DefiAssetType(data) {
+	case DefiAssetTypeStaking:
+		*s = DefiAssetTypeStaking
+		return nil
+	case DefiAssetTypeLendingSupply:
+		*s = DefiAssetTypeLendingSupply
+		return nil
+	case DefiAssetTypeLendingBorrow:
+		*s = DefiAssetTypeLendingBorrow
+		return nil
+	case DefiAssetTypeLiquidStaking:
+		*s = DefiAssetTypeLiquidStaking
+		return nil
+	case DefiAssetTypeLiquidPool:
+		*s = DefiAssetTypeLiquidPool
+		return nil
+	case DefiAssetTypeYieldToken:
+		*s = DefiAssetTypeYieldToken
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// Ref: #/components/schemas/DefiAssets
+type DefiAssets struct {
+	Assets []DefiAsset `json:"assets"`
+}
+
+// GetAssets returns the value of Assets.
+func (s *DefiAssets) GetAssets() []DefiAsset {
+	return s.Assets
+}
+
+// SetAssets sets the value of Assets.
+func (s *DefiAssets) SetAssets(val []DefiAsset) {
+	s.Assets = val
+}
+
+// Ref: #/components/schemas/DefiLiquidPoolAssets
+type DefiLiquidPoolAssets struct {
+	Asset0 DefiLockedAsset `json:"asset0"`
+	Asset1 DefiLockedAsset `json:"asset1"`
+}
+
+// GetAsset0 returns the value of Asset0.
+func (s *DefiLiquidPoolAssets) GetAsset0() DefiLockedAsset {
+	return s.Asset0
+}
+
+// GetAsset1 returns the value of Asset1.
+func (s *DefiLiquidPoolAssets) GetAsset1() DefiLockedAsset {
+	return s.Asset1
+}
+
+// SetAsset0 sets the value of Asset0.
+func (s *DefiLiquidPoolAssets) SetAsset0(val DefiLockedAsset) {
+	s.Asset0 = val
+}
+
+// SetAsset1 sets the value of Asset1.
+func (s *DefiLiquidPoolAssets) SetAsset1(val DefiLockedAsset) {
+	s.Asset1 = val
+}
+
+// Ref: #/components/schemas/DefiLockedAsset
+type DefiLockedAsset struct {
+	// Native Gram or jetton asset.
+	Type   DefiLockedAssetType `json:"type"`
+	Jetton OptJettonPreview    `json:"jetton"`
+}
+
+// GetType returns the value of Type.
+func (s *DefiLockedAsset) GetType() DefiLockedAssetType {
+	return s.Type
+}
+
+// GetJetton returns the value of Jetton.
+func (s *DefiLockedAsset) GetJetton() OptJettonPreview {
+	return s.Jetton
+}
+
+// SetType sets the value of Type.
+func (s *DefiLockedAsset) SetType(val DefiLockedAssetType) {
+	s.Type = val
+}
+
+// SetJetton sets the value of Jetton.
+func (s *DefiLockedAsset) SetJetton(val OptJettonPreview) {
+	s.Jetton = val
+}
+
+// Native Gram or jetton asset.
+type DefiLockedAssetType string
+
+const (
+	DefiLockedAssetTypeNative DefiLockedAssetType = "native"
+	DefiLockedAssetTypeJetton DefiLockedAssetType = "jetton"
+)
+
+// AllValues returns all DefiLockedAssetType values.
+func (DefiLockedAssetType) AllValues() []DefiLockedAssetType {
+	return []DefiLockedAssetType{
+		DefiLockedAssetTypeNative,
+		DefiLockedAssetTypeJetton,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s DefiLockedAssetType) MarshalText() ([]byte, error) {
+	switch s {
+	case DefiLockedAssetTypeNative:
+		return []byte(s), nil
+	case DefiLockedAssetTypeJetton:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *DefiLockedAssetType) UnmarshalText(data []byte) error {
+	switch DefiLockedAssetType(data) {
+	case DefiLockedAssetTypeNative:
+		*s = DefiLockedAssetTypeNative
+		return nil
+	case DefiLockedAssetTypeJetton:
+		*s = DefiLockedAssetTypeJetton
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// Ref: #/components/schemas/DefiProvider
+type DefiProvider struct {
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Link        string    `json:"link"`
+	MiniappLink OptString `json:"miniapp_link"`
+	Icon        string    `json:"icon"`
+	Card        string    `json:"card"`
+	Full        string    `json:"full"`
+	Tag         string    `json:"tag"`
+}
+
+// GetName returns the value of Name.
+func (s *DefiProvider) GetName() string {
+	return s.Name
+}
+
+// GetDescription returns the value of Description.
+func (s *DefiProvider) GetDescription() string {
+	return s.Description
+}
+
+// GetLink returns the value of Link.
+func (s *DefiProvider) GetLink() string {
+	return s.Link
+}
+
+// GetMiniappLink returns the value of MiniappLink.
+func (s *DefiProvider) GetMiniappLink() OptString {
+	return s.MiniappLink
+}
+
+// GetIcon returns the value of Icon.
+func (s *DefiProvider) GetIcon() string {
+	return s.Icon
+}
+
+// GetCard returns the value of Card.
+func (s *DefiProvider) GetCard() string {
+	return s.Card
+}
+
+// GetFull returns the value of Full.
+func (s *DefiProvider) GetFull() string {
+	return s.Full
+}
+
+// GetTag returns the value of Tag.
+func (s *DefiProvider) GetTag() string {
+	return s.Tag
+}
+
+// SetName sets the value of Name.
+func (s *DefiProvider) SetName(val string) {
+	s.Name = val
+}
+
+// SetDescription sets the value of Description.
+func (s *DefiProvider) SetDescription(val string) {
+	s.Description = val
+}
+
+// SetLink sets the value of Link.
+func (s *DefiProvider) SetLink(val string) {
+	s.Link = val
+}
+
+// SetMiniappLink sets the value of MiniappLink.
+func (s *DefiProvider) SetMiniappLink(val OptString) {
+	s.MiniappLink = val
+}
+
+// SetIcon sets the value of Icon.
+func (s *DefiProvider) SetIcon(val string) {
+	s.Icon = val
+}
+
+// SetCard sets the value of Card.
+func (s *DefiProvider) SetCard(val string) {
+	s.Card = val
+}
+
+// SetFull sets the value of Full.
+func (s *DefiProvider) SetFull(val string) {
+	s.Full = val
+}
+
+// SetTag sets the value of Tag.
+func (s *DefiProvider) SetTag(val string) {
+	s.Tag = val
+}
+
 // Validator's participation in elections.
 // Ref: #/components/schemas/DepositStakeAction
 type DepositStakeAction struct {
@@ -5265,6 +5700,32 @@ func (s *DepositTokenStakeAction) SetProtocol(val Protocol) {
 // SetStakeMeta sets the value of StakeMeta.
 func (s *DepositTokenStakeAction) SetStakeMeta(val OptPrice) {
 	s.StakeMeta = val
+}
+
+// Ref: #/components/schemas/DepositXTRAction
+type DepositXTRAction struct {
+	Recipient AccountAddress `json:"recipient"`
+	Amount    string         `json:"amount"`
+}
+
+// GetRecipient returns the value of Recipient.
+func (s *DepositXTRAction) GetRecipient() AccountAddress {
+	return s.Recipient
+}
+
+// GetAmount returns the value of Amount.
+func (s *DepositXTRAction) GetAmount() string {
+	return s.Amount
+}
+
+// SetRecipient sets the value of Recipient.
+func (s *DepositXTRAction) SetRecipient(val AccountAddress) {
+	s.Recipient = val
+}
+
+// SetAmount sets the value of Amount.
+func (s *DepositXTRAction) SetAmount(val string) {
+	s.Amount = val
 }
 
 // Ref: #/components/schemas/DnsExpiring
@@ -5726,6 +6187,9 @@ func (s *EmulateMessageToTraceReq) SetBoc(val string) {
 
 type EmulateMessageToWalletReq struct {
 	Boc string `json:"boc"`
+	// Override the destination wallet address extracted from the BoC. Useful when the BoC was signed
+	// with a throwaway key and the real wallet address must be emulated against.
+	AddressOverride OptString `json:"address_override"`
 	// Additional per account configuration.
 	Params []EmulateMessageToWalletReqParamsItem `json:"params"`
 }
@@ -5733,6 +6197,11 @@ type EmulateMessageToWalletReq struct {
 // GetBoc returns the value of Boc.
 func (s *EmulateMessageToWalletReq) GetBoc() string {
 	return s.Boc
+}
+
+// GetAddressOverride returns the value of AddressOverride.
+func (s *EmulateMessageToWalletReq) GetAddressOverride() OptString {
+	return s.AddressOverride
 }
 
 // GetParams returns the value of Params.
@@ -5743,6 +6212,11 @@ func (s *EmulateMessageToWalletReq) GetParams() []EmulateMessageToWalletReqParam
 // SetBoc sets the value of Boc.
 func (s *EmulateMessageToWalletReq) SetBoc(val string) {
 	s.Boc = val
+}
+
+// SetAddressOverride sets the value of AddressOverride.
+func (s *EmulateMessageToWalletReq) SetAddressOverride(val OptString) {
+	s.AddressOverride = val
 }
 
 // SetParams sets the value of Params.
@@ -5802,8 +6276,9 @@ func (s *EncryptedComment) SetCipherText(val string) {
 }
 
 type Error struct {
-	Error     string   `json:"error"`
-	ErrorCode OptInt64 `json:"error_code"`
+	Error     string               `json:"error"`
+	ErrorCode OptInt64             `json:"error_code"`
+	Details   OptInsufficientFunds `json:"details"`
 }
 
 // GetError returns the value of Error.
@@ -5816,6 +6291,11 @@ func (s *Error) GetErrorCode() OptInt64 {
 	return s.ErrorCode
 }
 
+// GetDetails returns the value of Details.
+func (s *Error) GetDetails() OptInsufficientFunds {
+	return s.Details
+}
+
 // SetError sets the value of Error.
 func (s *Error) SetError(val string) {
 	s.Error = val
@@ -5824,6 +6304,11 @@ func (s *Error) SetError(val string) {
 // SetErrorCode sets the value of ErrorCode.
 func (s *Error) SetErrorCode(val OptInt64) {
 	s.ErrorCode = val
+}
+
+// SetDetails sets the value of Details.
+func (s *Error) SetDetails(val OptInsufficientFunds) {
+	s.Details = val
 }
 
 // ErrorStatusCode wraps Error with StatusCode.
@@ -6909,6 +7394,20 @@ func (s *GetMarketsRatesOK) GetMarkets() []MarketTonRates {
 // SetMarkets sets the value of Markets.
 func (s *GetMarketsRatesOK) SetMarkets(val []MarketTonRates) {
 	s.Markets = val
+}
+
+type GetMigrationWalletsReq struct {
+	AccountIds []string `json:"account_ids"`
+}
+
+// GetAccountIds returns the value of AccountIds.
+func (s *GetMigrationWalletsReq) GetAccountIds() []string {
+	return s.AccountIds
+}
+
+// SetAccountIds sets the value of AccountIds.
+func (s *GetMigrationWalletsReq) SetAccountIds(val []string) {
+	s.AccountIds = val
 }
 
 type GetNftCollectionItemsByAddressesReq struct {
@@ -8060,12 +8559,91 @@ func (s *InitStateRaw) SetFileHash(val string) {
 	s.FileHash = val
 }
 
+// Present on an error when a request failed because the source wallet does not hold enough TON to
+// cover the required gas (error_code 50000).
+// Ref: #/components/schemas/InsufficientFunds
+type InsufficientFunds struct {
+	// TON in nanotons required to cover transfer gas.
+	Required int64 `json:"required"`
+	// TON in nanotons currently available on the source wallet.
+	Available int64 `json:"available"`
+}
+
+// GetRequired returns the value of Required.
+func (s *InsufficientFunds) GetRequired() int64 {
+	return s.Required
+}
+
+// GetAvailable returns the value of Available.
+func (s *InsufficientFunds) GetAvailable() int64 {
+	return s.Available
+}
+
+// SetRequired sets the value of Required.
+func (s *InsufficientFunds) SetRequired(val int64) {
+	s.Required = val
+}
+
+// SetAvailable sets the value of Available.
+func (s *InsufficientFunds) SetAvailable(val int64) {
+	s.Available = val
+}
+
+// Ref: #/components/schemas/JettonAssetInfo
+type JettonAssetInfo struct {
+	TokenType    DefiAssetType           `json:"token_type"`
+	Type         OptDefiAssetType        `json:"type"`
+	DefiProvider DefiProvider            `json:"defi_provider"`
+	PoolAssets   OptDefiLiquidPoolAssets `json:"pool_assets"`
+}
+
+// GetTokenType returns the value of TokenType.
+func (s *JettonAssetInfo) GetTokenType() DefiAssetType {
+	return s.TokenType
+}
+
+// GetType returns the value of Type.
+func (s *JettonAssetInfo) GetType() OptDefiAssetType {
+	return s.Type
+}
+
+// GetDefiProvider returns the value of DefiProvider.
+func (s *JettonAssetInfo) GetDefiProvider() DefiProvider {
+	return s.DefiProvider
+}
+
+// GetPoolAssets returns the value of PoolAssets.
+func (s *JettonAssetInfo) GetPoolAssets() OptDefiLiquidPoolAssets {
+	return s.PoolAssets
+}
+
+// SetTokenType sets the value of TokenType.
+func (s *JettonAssetInfo) SetTokenType(val DefiAssetType) {
+	s.TokenType = val
+}
+
+// SetType sets the value of Type.
+func (s *JettonAssetInfo) SetType(val OptDefiAssetType) {
+	s.Type = val
+}
+
+// SetDefiProvider sets the value of DefiProvider.
+func (s *JettonAssetInfo) SetDefiProvider(val DefiProvider) {
+	s.DefiProvider = val
+}
+
+// SetPoolAssets sets the value of PoolAssets.
+func (s *JettonAssetInfo) SetPoolAssets(val OptDefiLiquidPoolAssets) {
+	s.PoolAssets = val
+}
+
 // Ref: #/components/schemas/JettonBalance
 type JettonBalance struct {
 	Balance       string               `json:"balance"`
 	Price         OptTokenRates        `json:"price"`
 	WalletAddress AccountAddress       `json:"wallet_address"`
 	Jetton        JettonPreview        `json:"jetton"`
+	DefiAsset     OptJettonAssetInfo   `json:"defi_asset"`
 	Extensions    []string             `json:"extensions"`
 	Lock          OptJettonBalanceLock `json:"lock"`
 }
@@ -8088,6 +8666,11 @@ func (s *JettonBalance) GetWalletAddress() AccountAddress {
 // GetJetton returns the value of Jetton.
 func (s *JettonBalance) GetJetton() JettonPreview {
 	return s.Jetton
+}
+
+// GetDefiAsset returns the value of DefiAsset.
+func (s *JettonBalance) GetDefiAsset() OptJettonAssetInfo {
+	return s.DefiAsset
 }
 
 // GetExtensions returns the value of Extensions.
@@ -8118,6 +8701,11 @@ func (s *JettonBalance) SetWalletAddress(val AccountAddress) {
 // SetJetton sets the value of Jetton.
 func (s *JettonBalance) SetJetton(val JettonPreview) {
 	s.Jetton = val
+}
+
+// SetDefiAsset sets the value of DefiAsset.
+func (s *JettonBalance) SetDefiAsset(val OptJettonAssetInfo) {
+	s.DefiAsset = val
 }
 
 // SetExtensions sets the value of Extensions.
@@ -8238,12 +8826,20 @@ func (s *JettonBridgeParams) SetPrices(val OptJettonBridgePrices) {
 
 // Ref: #/components/schemas/JettonBridgePrices
 type JettonBridgePrices struct {
-	BridgeBurnFee           int64 `json:"bridge_burn_fee"`
-	BridgeMintFee           int64 `json:"bridge_mint_fee"`
-	WalletMinTonsForStorage int64 `json:"wallet_min_tons_for_storage"`
-	WalletGasConsumption    int64 `json:"wallet_gas_consumption"`
-	MinterMinTonsForStorage int64 `json:"minter_min_tons_for_storage"`
-	DiscoverGasConsumption  int64 `json:"discover_gas_consumption"`
+	BridgeBurnFee int64 `json:"bridge_burn_fee"`
+	BridgeMintFee int64 `json:"bridge_mint_fee"`
+	// This field will gone after Sept. 2026, use wallet_min_gram_for_storage instead.
+	//
+	// Deprecated: schema marks this property as deprecated.
+	WalletMinTonsForStorage OptInt64 `json:"wallet_min_tons_for_storage"`
+	WalletMinGramForStorage int64    `json:"wallet_min_gram_for_storage"`
+	WalletGasConsumption    int64    `json:"wallet_gas_consumption"`
+	// This field will gone after Sept. 2026, use wallet_min_gram_for_storage instead.
+	//
+	// Deprecated: schema marks this property as deprecated.
+	MinterMinTonsForStorage OptInt64 `json:"minter_min_tons_for_storage"`
+	MinterMinGramForStorage int64    `json:"minter_min_gram_for_storage"`
+	DiscoverGasConsumption  int64    `json:"discover_gas_consumption"`
 }
 
 // GetBridgeBurnFee returns the value of BridgeBurnFee.
@@ -8257,8 +8853,13 @@ func (s *JettonBridgePrices) GetBridgeMintFee() int64 {
 }
 
 // GetWalletMinTonsForStorage returns the value of WalletMinTonsForStorage.
-func (s *JettonBridgePrices) GetWalletMinTonsForStorage() int64 {
+func (s *JettonBridgePrices) GetWalletMinTonsForStorage() OptInt64 {
 	return s.WalletMinTonsForStorage
+}
+
+// GetWalletMinGramForStorage returns the value of WalletMinGramForStorage.
+func (s *JettonBridgePrices) GetWalletMinGramForStorage() int64 {
+	return s.WalletMinGramForStorage
 }
 
 // GetWalletGasConsumption returns the value of WalletGasConsumption.
@@ -8267,8 +8868,13 @@ func (s *JettonBridgePrices) GetWalletGasConsumption() int64 {
 }
 
 // GetMinterMinTonsForStorage returns the value of MinterMinTonsForStorage.
-func (s *JettonBridgePrices) GetMinterMinTonsForStorage() int64 {
+func (s *JettonBridgePrices) GetMinterMinTonsForStorage() OptInt64 {
 	return s.MinterMinTonsForStorage
+}
+
+// GetMinterMinGramForStorage returns the value of MinterMinGramForStorage.
+func (s *JettonBridgePrices) GetMinterMinGramForStorage() int64 {
+	return s.MinterMinGramForStorage
 }
 
 // GetDiscoverGasConsumption returns the value of DiscoverGasConsumption.
@@ -8287,8 +8893,13 @@ func (s *JettonBridgePrices) SetBridgeMintFee(val int64) {
 }
 
 // SetWalletMinTonsForStorage sets the value of WalletMinTonsForStorage.
-func (s *JettonBridgePrices) SetWalletMinTonsForStorage(val int64) {
+func (s *JettonBridgePrices) SetWalletMinTonsForStorage(val OptInt64) {
 	s.WalletMinTonsForStorage = val
+}
+
+// SetWalletMinGramForStorage sets the value of WalletMinGramForStorage.
+func (s *JettonBridgePrices) SetWalletMinGramForStorage(val int64) {
+	s.WalletMinGramForStorage = val
 }
 
 // SetWalletGasConsumption sets the value of WalletGasConsumption.
@@ -8297,8 +8908,13 @@ func (s *JettonBridgePrices) SetWalletGasConsumption(val int64) {
 }
 
 // SetMinterMinTonsForStorage sets the value of MinterMinTonsForStorage.
-func (s *JettonBridgePrices) SetMinterMinTonsForStorage(val int64) {
+func (s *JettonBridgePrices) SetMinterMinTonsForStorage(val OptInt64) {
 	s.MinterMinTonsForStorage = val
+}
+
+// SetMinterMinGramForStorage sets the value of MinterMinGramForStorage.
+func (s *JettonBridgePrices) SetMinterMinGramForStorage(val int64) {
+	s.MinterMinGramForStorage = val
 }
 
 // SetDiscoverGasConsumption sets the value of DiscoverGasConsumption.
@@ -9089,11 +9705,19 @@ func (s *JettonQuantity) SetJetton(val JettonPreview) {
 
 // Ref: #/components/schemas/JettonSwapAction
 type JettonSwapAction struct {
-	Dex             string           `json:"dex"`
-	AmountIn        string           `json:"amount_in"`
-	AmountOut       string           `json:"amount_out"`
-	TonIn           OptInt64         `json:"ton_in"`
+	Dex       string `json:"dex"`
+	AmountIn  string `json:"amount_in"`
+	AmountOut string `json:"amount_out"`
+	// This field will gone after Sept. 2026, use gram_in instead.
+	//
+	// Deprecated: schema marks this property as deprecated.
+	TonIn OptInt64 `json:"ton_in"`
+	// This field will gone after Sept. 2026, use gram_out instead.
+	//
+	// Deprecated: schema marks this property as deprecated.
 	TonOut          OptInt64         `json:"ton_out"`
+	GramIn          OptInt64         `json:"gram_in"`
+	GramOut         OptInt64         `json:"gram_out"`
 	UserWallet      AccountAddress   `json:"user_wallet"`
 	Router          AccountAddress   `json:"router"`
 	JettonMasterIn  OptJettonPreview `json:"jetton_master_in"`
@@ -9123,6 +9747,16 @@ func (s *JettonSwapAction) GetTonIn() OptInt64 {
 // GetTonOut returns the value of TonOut.
 func (s *JettonSwapAction) GetTonOut() OptInt64 {
 	return s.TonOut
+}
+
+// GetGramIn returns the value of GramIn.
+func (s *JettonSwapAction) GetGramIn() OptInt64 {
+	return s.GramIn
+}
+
+// GetGramOut returns the value of GramOut.
+func (s *JettonSwapAction) GetGramOut() OptInt64 {
+	return s.GramOut
 }
 
 // GetUserWallet returns the value of UserWallet.
@@ -9168,6 +9802,16 @@ func (s *JettonSwapAction) SetTonIn(val OptInt64) {
 // SetTonOut sets the value of TonOut.
 func (s *JettonSwapAction) SetTonOut(val OptInt64) {
 	s.TonOut = val
+}
+
+// SetGramIn sets the value of GramIn.
+func (s *JettonSwapAction) SetGramIn(val OptInt64) {
+	s.GramIn = val
+}
+
+// SetGramOut sets the value of GramOut.
+func (s *JettonSwapAction) SetGramOut(val OptInt64) {
+	s.GramOut = val
 }
 
 // SetUserWallet sets the value of UserWallet.
@@ -9887,6 +10531,391 @@ func (s *MethodExecutionResult) SetDecoded(val jx.Raw) {
 	s.Decoded = val
 }
 
+// Ref: #/components/schemas/MigrationOutMessage
+type MigrationOutMessage struct {
+	// Base64 BOC of the internal message cell the wallet resends.
+	Boc string `json:"boc"`
+	// Send-mode byte (e.g. 3 for a transfer, 128 for the final balance sweep).
+	Mode int32 `json:"mode"`
+}
+
+// GetBoc returns the value of Boc.
+func (s *MigrationOutMessage) GetBoc() string {
+	return s.Boc
+}
+
+// GetMode returns the value of Mode.
+func (s *MigrationOutMessage) GetMode() int32 {
+	return s.Mode
+}
+
+// SetBoc sets the value of Boc.
+func (s *MigrationOutMessage) SetBoc(val string) {
+	s.Boc = val
+}
+
+// SetMode sets the value of Mode.
+func (s *MigrationOutMessage) SetMode(val int32) {
+	s.Mode = val
+}
+
+// Ref: #/components/schemas/MigrationPrepareRequest
+type MigrationPrepareRequest struct {
+	// Legacy source wallet to drain.
+	From string `json:"from"`
+	// Destination wallet TON address.
+	To string `json:"to"`
+	// Fiat currency for the preview values.
+	Currency OptString `json:"currency"`
+	// Hex-encoded ed25519 public key of the source wallet. If `from` wallet is uninitialized, then
+	// public_key is used to infer wallet code.
+	PublicKey OptString `json:"public_key"`
+	// Who pays the gas:
+	// - `self` — the source wallet pays, as usual
+	// - `battery` — asset transfers are sponsored by the Tonkeeper Battery
+	// - `gasless` — source wallet pays with jetton, in this case `gas_jetton_master` is required too
+	// (only from this list: `/v2/gasless/config`).
+	GasPayer OptMigrationPrepareRequestGasPayer `json:"gas_payer"`
+	// Master address of jetton that should be used to cover transactions fees. Must be supported by
+	// /v2/gasless/config and held by the source wallet.
+	GasJettonMaster OptString `json:"gas_jetton_master"`
+}
+
+// GetFrom returns the value of From.
+func (s *MigrationPrepareRequest) GetFrom() string {
+	return s.From
+}
+
+// GetTo returns the value of To.
+func (s *MigrationPrepareRequest) GetTo() string {
+	return s.To
+}
+
+// GetCurrency returns the value of Currency.
+func (s *MigrationPrepareRequest) GetCurrency() OptString {
+	return s.Currency
+}
+
+// GetPublicKey returns the value of PublicKey.
+func (s *MigrationPrepareRequest) GetPublicKey() OptString {
+	return s.PublicKey
+}
+
+// GetGasPayer returns the value of GasPayer.
+func (s *MigrationPrepareRequest) GetGasPayer() OptMigrationPrepareRequestGasPayer {
+	return s.GasPayer
+}
+
+// GetGasJettonMaster returns the value of GasJettonMaster.
+func (s *MigrationPrepareRequest) GetGasJettonMaster() OptString {
+	return s.GasJettonMaster
+}
+
+// SetFrom sets the value of From.
+func (s *MigrationPrepareRequest) SetFrom(val string) {
+	s.From = val
+}
+
+// SetTo sets the value of To.
+func (s *MigrationPrepareRequest) SetTo(val string) {
+	s.To = val
+}
+
+// SetCurrency sets the value of Currency.
+func (s *MigrationPrepareRequest) SetCurrency(val OptString) {
+	s.Currency = val
+}
+
+// SetPublicKey sets the value of PublicKey.
+func (s *MigrationPrepareRequest) SetPublicKey(val OptString) {
+	s.PublicKey = val
+}
+
+// SetGasPayer sets the value of GasPayer.
+func (s *MigrationPrepareRequest) SetGasPayer(val OptMigrationPrepareRequestGasPayer) {
+	s.GasPayer = val
+}
+
+// SetGasJettonMaster sets the value of GasJettonMaster.
+func (s *MigrationPrepareRequest) SetGasJettonMaster(val OptString) {
+	s.GasJettonMaster = val
+}
+
+// Who pays the gas:
+// - `self` — the source wallet pays, as usual
+// - `battery` — asset transfers are sponsored by the Tonkeeper Battery
+// - `gasless` — source wallet pays with jetton, in this case `gas_jetton_master` is required too
+// (only from this list: `/v2/gasless/config`).
+type MigrationPrepareRequestGasPayer string
+
+const (
+	MigrationPrepareRequestGasPayerSelf    MigrationPrepareRequestGasPayer = "self"
+	MigrationPrepareRequestGasPayerBattery MigrationPrepareRequestGasPayer = "battery"
+	MigrationPrepareRequestGasPayerGasless MigrationPrepareRequestGasPayer = "gasless"
+)
+
+// AllValues returns all MigrationPrepareRequestGasPayer values.
+func (MigrationPrepareRequestGasPayer) AllValues() []MigrationPrepareRequestGasPayer {
+	return []MigrationPrepareRequestGasPayer{
+		MigrationPrepareRequestGasPayerSelf,
+		MigrationPrepareRequestGasPayerBattery,
+		MigrationPrepareRequestGasPayerGasless,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s MigrationPrepareRequestGasPayer) MarshalText() ([]byte, error) {
+	switch s {
+	case MigrationPrepareRequestGasPayerSelf:
+		return []byte(s), nil
+	case MigrationPrepareRequestGasPayerBattery:
+		return []byte(s), nil
+	case MigrationPrepareRequestGasPayerGasless:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *MigrationPrepareRequestGasPayer) UnmarshalText(data []byte) error {
+	switch MigrationPrepareRequestGasPayer(data) {
+	case MigrationPrepareRequestGasPayerSelf:
+		*s = MigrationPrepareRequestGasPayerSelf
+		return nil
+	case MigrationPrepareRequestGasPayerBattery:
+		*s = MigrationPrepareRequestGasPayerBattery
+		return nil
+	case MigrationPrepareRequestGasPayerGasless:
+		*s = MigrationPrepareRequestGasPayerGasless
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// Ref: #/components/schemas/MigrationPrepareResponse
+type MigrationPrepareResponse struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	// Source wallet version (informational).
+	WalletVersion string `json:"wallet_version"`
+	// Ordered; sign and broadcast in array order, one entry per external message.
+	Transactions []MigrationTransaction `json:"transactions"`
+}
+
+// GetFrom returns the value of From.
+func (s *MigrationPrepareResponse) GetFrom() string {
+	return s.From
+}
+
+// GetTo returns the value of To.
+func (s *MigrationPrepareResponse) GetTo() string {
+	return s.To
+}
+
+// GetWalletVersion returns the value of WalletVersion.
+func (s *MigrationPrepareResponse) GetWalletVersion() string {
+	return s.WalletVersion
+}
+
+// GetTransactions returns the value of Transactions.
+func (s *MigrationPrepareResponse) GetTransactions() []MigrationTransaction {
+	return s.Transactions
+}
+
+// SetFrom sets the value of From.
+func (s *MigrationPrepareResponse) SetFrom(val string) {
+	s.From = val
+}
+
+// SetTo sets the value of To.
+func (s *MigrationPrepareResponse) SetTo(val string) {
+	s.To = val
+}
+
+// SetWalletVersion sets the value of WalletVersion.
+func (s *MigrationPrepareResponse) SetWalletVersion(val string) {
+	s.WalletVersion = val
+}
+
+// SetTransactions sets the value of Transactions.
+func (s *MigrationPrepareResponse) SetTransactions(val []MigrationTransaction) {
+	s.Transactions = val
+}
+
+// Ref: #/components/schemas/MigrationTransaction
+type MigrationTransaction struct {
+	// Wallet seqno baked into the unsigned body.
+	Seqno int32 `json:"seqno"`
+	// Base64 BOC of the unsigned wallet body. The body type is determined by (wallet_version,
+	// sponsored): for v3/v4 it is always the external body — sign its hash, prepend the signature,
+	// wrap in an external message; for w5 with sponsored=false it is the external body with the
+	// signature appended as the trailing 512 bits; for w5 with sponsored=true it is the internal_signed
+	// body — sign and wrap it for /v2/gasless/send as in the gasless flow.
+	Boc string `json:"boc"`
+	// True — the Battery relay pays gas for this transaction; submit it via /v2/gasless/send. false
+	// — self-paid; sign and broadcast via /v2/blockchain/message as usual (e.g. the final TON sweep).
+	Sponsored OptBool `json:"sponsored"`
+	// Gasless only; the relay commission in indivisible gas-jetton units, embedded in the boc as a
+	// jetton transfer to the relay. Exact for the first transaction; an estimate for later ones
+	// (re-running prepare refreshes it).
+	Commission OptString `json:"commission"`
+	// Base64 BOC of the wallet StateInit (code + data). Present only on the first transaction when the
+	// source wallet is not yet initialized.
+	StateInit OptString `json:"state_init"`
+	// Ordered raw internal messages carried by this transaction — the cells the wallet resends. These
+	// are what populate the payload/actions.
+	Messages  []MigrationOutMessage `json:"messages"`
+	Emulation MessageConsequences   `json:"emulation"`
+}
+
+// GetSeqno returns the value of Seqno.
+func (s *MigrationTransaction) GetSeqno() int32 {
+	return s.Seqno
+}
+
+// GetBoc returns the value of Boc.
+func (s *MigrationTransaction) GetBoc() string {
+	return s.Boc
+}
+
+// GetSponsored returns the value of Sponsored.
+func (s *MigrationTransaction) GetSponsored() OptBool {
+	return s.Sponsored
+}
+
+// GetCommission returns the value of Commission.
+func (s *MigrationTransaction) GetCommission() OptString {
+	return s.Commission
+}
+
+// GetStateInit returns the value of StateInit.
+func (s *MigrationTransaction) GetStateInit() OptString {
+	return s.StateInit
+}
+
+// GetMessages returns the value of Messages.
+func (s *MigrationTransaction) GetMessages() []MigrationOutMessage {
+	return s.Messages
+}
+
+// GetEmulation returns the value of Emulation.
+func (s *MigrationTransaction) GetEmulation() MessageConsequences {
+	return s.Emulation
+}
+
+// SetSeqno sets the value of Seqno.
+func (s *MigrationTransaction) SetSeqno(val int32) {
+	s.Seqno = val
+}
+
+// SetBoc sets the value of Boc.
+func (s *MigrationTransaction) SetBoc(val string) {
+	s.Boc = val
+}
+
+// SetSponsored sets the value of Sponsored.
+func (s *MigrationTransaction) SetSponsored(val OptBool) {
+	s.Sponsored = val
+}
+
+// SetCommission sets the value of Commission.
+func (s *MigrationTransaction) SetCommission(val OptString) {
+	s.Commission = val
+}
+
+// SetStateInit sets the value of StateInit.
+func (s *MigrationTransaction) SetStateInit(val OptString) {
+	s.StateInit = val
+}
+
+// SetMessages sets the value of Messages.
+func (s *MigrationTransaction) SetMessages(val []MigrationOutMessage) {
+	s.Messages = val
+}
+
+// SetEmulation sets the value of Emulation.
+func (s *MigrationTransaction) SetEmulation(val MessageConsequences) {
+	s.Emulation = val
+}
+
+// Ref: #/components/schemas/MigrationWalletValue
+type MigrationWalletValue struct {
+	Account string `json:"account"`
+	// TON balance in nanotons.
+	Balance int64           `json:"balance"`
+	Status  AccountStatus   `json:"status"`
+	Jettons []JettonBalance `json:"jettons"`
+	// Number of NFTs owned by the account.
+	NftCount int32 `json:"nft_count"`
+}
+
+// GetAccount returns the value of Account.
+func (s *MigrationWalletValue) GetAccount() string {
+	return s.Account
+}
+
+// GetBalance returns the value of Balance.
+func (s *MigrationWalletValue) GetBalance() int64 {
+	return s.Balance
+}
+
+// GetStatus returns the value of Status.
+func (s *MigrationWalletValue) GetStatus() AccountStatus {
+	return s.Status
+}
+
+// GetJettons returns the value of Jettons.
+func (s *MigrationWalletValue) GetJettons() []JettonBalance {
+	return s.Jettons
+}
+
+// GetNftCount returns the value of NftCount.
+func (s *MigrationWalletValue) GetNftCount() int32 {
+	return s.NftCount
+}
+
+// SetAccount sets the value of Account.
+func (s *MigrationWalletValue) SetAccount(val string) {
+	s.Account = val
+}
+
+// SetBalance sets the value of Balance.
+func (s *MigrationWalletValue) SetBalance(val int64) {
+	s.Balance = val
+}
+
+// SetStatus sets the value of Status.
+func (s *MigrationWalletValue) SetStatus(val AccountStatus) {
+	s.Status = val
+}
+
+// SetJettons sets the value of Jettons.
+func (s *MigrationWalletValue) SetJettons(val []JettonBalance) {
+	s.Jettons = val
+}
+
+// SetNftCount sets the value of NftCount.
+func (s *MigrationWalletValue) SetNftCount(val int32) {
+	s.NftCount = val
+}
+
+// Ref: #/components/schemas/MigrationWallets
+type MigrationWallets struct {
+	Wallets []MigrationWalletValue `json:"wallets"`
+}
+
+// GetWallets returns the value of Wallets.
+func (s *MigrationWallets) GetWallets() []MigrationWalletValue {
+	return s.Wallets
+}
+
+// SetWallets sets the value of Wallets.
+func (s *MigrationWallets) SetWallets(val []MigrationWalletValue) {
+	s.Wallets = val
+}
+
 // Ref: #/components/schemas/MisbehaviourPunishmentConfig
 type MisbehaviourPunishmentConfig struct {
 	DefaultFlatFine          int64 `json:"default_flat_fine"`
@@ -10476,13 +11505,15 @@ func (s *NftApprovedByItem) UnmarshalText(data []byte) error {
 
 // Ref: #/components/schemas/NftCollection
 type NftCollection struct {
-	Address              string                   `json:"address"`
-	NextItemIndex        int64                    `json:"next_item_index"`
-	Owner                OptAccountAddress        `json:"owner"`
-	RawCollectionContent string                   `json:"raw_collection_content"`
-	Metadata             OptNftCollectionMetadata `json:"metadata"`
-	Previews             []ImagePreview           `json:"previews"`
-	ApprovedBy           NftApprovedBy            `json:"approved_by"`
+	Address              string                         `json:"address"`
+	NextItemIndex        int64                          `json:"next_item_index"`
+	Owner                OptAccountAddress              `json:"owner"`
+	RawCollectionContent string                         `json:"raw_collection_content"`
+	Metadata             OptNftCollectionMetadata       `json:"metadata"`
+	Previews             []ImagePreview                 `json:"previews"`
+	ApprovedBy           NftApprovedBy                  `json:"approved_by"`
+	Trust                TrustType                      `json:"trust"`
+	MetadataStatus       OptNftCollectionMetadataStatus `json:"metadata_status"`
 }
 
 // GetAddress returns the value of Address.
@@ -10520,6 +11551,16 @@ func (s *NftCollection) GetApprovedBy() NftApprovedBy {
 	return s.ApprovedBy
 }
 
+// GetTrust returns the value of Trust.
+func (s *NftCollection) GetTrust() TrustType {
+	return s.Trust
+}
+
+// GetMetadataStatus returns the value of MetadataStatus.
+func (s *NftCollection) GetMetadataStatus() OptNftCollectionMetadataStatus {
+	return s.MetadataStatus
+}
+
 // SetAddress sets the value of Address.
 func (s *NftCollection) SetAddress(val string) {
 	s.Address = val
@@ -10555,6 +11596,16 @@ func (s *NftCollection) SetApprovedBy(val NftApprovedBy) {
 	s.ApprovedBy = val
 }
 
+// SetTrust sets the value of Trust.
+func (s *NftCollection) SetTrust(val TrustType) {
+	s.Trust = val
+}
+
+// SetMetadataStatus sets the value of MetadataStatus.
+func (s *NftCollection) SetMetadataStatus(val OptNftCollectionMetadataStatus) {
+	s.MetadataStatus = val
+}
+
 type NftCollectionMetadata map[string]jx.Raw
 
 func (s *NftCollectionMetadata) init() NftCollectionMetadata {
@@ -10564,6 +11615,54 @@ func (s *NftCollectionMetadata) init() NftCollectionMetadata {
 		*s = m
 	}
 	return m
+}
+
+// Ref: #/components/schemas/NftCollectionMetadataStatus
+type NftCollectionMetadataStatus struct {
+	URL                OptString   `json:"url"`
+	IsBroken           OptBool     `json:"is_broken"`
+	LastRefreshTry     OptNilInt64 `json:"last_refresh_try"`
+	LastRefreshSuccess OptNilInt64 `json:"last_refresh_success"`
+}
+
+// GetURL returns the value of URL.
+func (s *NftCollectionMetadataStatus) GetURL() OptString {
+	return s.URL
+}
+
+// GetIsBroken returns the value of IsBroken.
+func (s *NftCollectionMetadataStatus) GetIsBroken() OptBool {
+	return s.IsBroken
+}
+
+// GetLastRefreshTry returns the value of LastRefreshTry.
+func (s *NftCollectionMetadataStatus) GetLastRefreshTry() OptNilInt64 {
+	return s.LastRefreshTry
+}
+
+// GetLastRefreshSuccess returns the value of LastRefreshSuccess.
+func (s *NftCollectionMetadataStatus) GetLastRefreshSuccess() OptNilInt64 {
+	return s.LastRefreshSuccess
+}
+
+// SetURL sets the value of URL.
+func (s *NftCollectionMetadataStatus) SetURL(val OptString) {
+	s.URL = val
+}
+
+// SetIsBroken sets the value of IsBroken.
+func (s *NftCollectionMetadataStatus) SetIsBroken(val OptBool) {
+	s.IsBroken = val
+}
+
+// SetLastRefreshTry sets the value of LastRefreshTry.
+func (s *NftCollectionMetadataStatus) SetLastRefreshTry(val OptNilInt64) {
+	s.LastRefreshTry = val
+}
+
+// SetLastRefreshSuccess sets the value of LastRefreshSuccess.
+func (s *NftCollectionMetadataStatus) SetLastRefreshSuccess(val OptNilInt64) {
+	s.LastRefreshSuccess = val
 }
 
 // Ref: #/components/schemas/NftCollections
@@ -11116,11 +12215,11 @@ type NominatorRewardEntry struct {
 	Address string `json:"address"`
 	// Nominator's share of total nominators' deposit (0–1).
 	Weight float64 `json:"weight"`
-	// Amount in nanotons.
+	// Amount in nanograms.
 	Reward int64 `json:"reward"`
-	// Amount in nanotons.
+	// Amount in nanograms.
 	EffectiveStake int64 `json:"effective_stake"`
-	// Amount in nanotons.
+	// Amount in nanograms.
 	Stake int64 `json:"stake"`
 }
 
@@ -13060,6 +14159,52 @@ func (o OptBouncePhaseType) Or(d BouncePhaseType) BouncePhaseType {
 	return d
 }
 
+// NewOptBuyXTRAction returns new OptBuyXTRAction with value set to v.
+func NewOptBuyXTRAction(v BuyXTRAction) OptBuyXTRAction {
+	return OptBuyXTRAction{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptBuyXTRAction is optional BuyXTRAction.
+type OptBuyXTRAction struct {
+	Value BuyXTRAction
+	Set   bool
+}
+
+// IsSet returns true if OptBuyXTRAction was set.
+func (o OptBuyXTRAction) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptBuyXTRAction) Reset() {
+	var v BuyXTRAction
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptBuyXTRAction) SetTo(v BuyXTRAction) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptBuyXTRAction) Get() (v BuyXTRAction, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptBuyXTRAction) Or(d BuyXTRAction) BuyXTRAction {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptComputePhase returns new OptComputePhase with value set to v.
 func NewOptComputePhase(v ComputePhase) OptComputePhase {
 	return OptComputePhase{
@@ -13474,6 +14619,98 @@ func (o OptDecodedMessageExtInMsgDecodedWalletV5) Or(d DecodedMessageExtInMsgDec
 	return d
 }
 
+// NewOptDefiAssetType returns new OptDefiAssetType with value set to v.
+func NewOptDefiAssetType(v DefiAssetType) OptDefiAssetType {
+	return OptDefiAssetType{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptDefiAssetType is optional DefiAssetType.
+type OptDefiAssetType struct {
+	Value DefiAssetType
+	Set   bool
+}
+
+// IsSet returns true if OptDefiAssetType was set.
+func (o OptDefiAssetType) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptDefiAssetType) Reset() {
+	var v DefiAssetType
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptDefiAssetType) SetTo(v DefiAssetType) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptDefiAssetType) Get() (v DefiAssetType, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptDefiAssetType) Or(d DefiAssetType) DefiAssetType {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptDefiLiquidPoolAssets returns new OptDefiLiquidPoolAssets with value set to v.
+func NewOptDefiLiquidPoolAssets(v DefiLiquidPoolAssets) OptDefiLiquidPoolAssets {
+	return OptDefiLiquidPoolAssets{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptDefiLiquidPoolAssets is optional DefiLiquidPoolAssets.
+type OptDefiLiquidPoolAssets struct {
+	Value DefiLiquidPoolAssets
+	Set   bool
+}
+
+// IsSet returns true if OptDefiLiquidPoolAssets was set.
+func (o OptDefiLiquidPoolAssets) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptDefiLiquidPoolAssets) Reset() {
+	var v DefiLiquidPoolAssets
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptDefiLiquidPoolAssets) SetTo(v DefiLiquidPoolAssets) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptDefiLiquidPoolAssets) Get() (v DefiLiquidPoolAssets, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptDefiLiquidPoolAssets) Or(d DefiLiquidPoolAssets) DefiLiquidPoolAssets {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptDepositStakeAction returns new OptDepositStakeAction with value set to v.
 func NewOptDepositStakeAction(v DepositStakeAction) OptDepositStakeAction {
 	return OptDepositStakeAction{
@@ -13560,6 +14797,52 @@ func (o OptDepositTokenStakeAction) Get() (v DepositTokenStakeAction, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptDepositTokenStakeAction) Or(d DepositTokenStakeAction) DepositTokenStakeAction {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptDepositXTRAction returns new OptDepositXTRAction with value set to v.
+func NewOptDepositXTRAction(v DepositXTRAction) OptDepositXTRAction {
+	return OptDepositXTRAction{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptDepositXTRAction is optional DepositXTRAction.
+type OptDepositXTRAction struct {
+	Value DepositXTRAction
+	Set   bool
+}
+
+// IsSet returns true if OptDepositXTRAction was set.
+func (o OptDepositXTRAction) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptDepositXTRAction) Reset() {
+	var v DepositXTRAction
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptDepositXTRAction) SetTo(v DepositXTRAction) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptDepositXTRAction) Get() (v DepositXTRAction, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptDepositXTRAction) Or(d DepositXTRAction) DepositXTRAction {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -14256,6 +15539,52 @@ func (o OptGetJettonInfosByAddressesReq) Or(d GetJettonInfosByAddressesReq) GetJ
 	return d
 }
 
+// NewOptGetMigrationWalletsReq returns new OptGetMigrationWalletsReq with value set to v.
+func NewOptGetMigrationWalletsReq(v GetMigrationWalletsReq) OptGetMigrationWalletsReq {
+	return OptGetMigrationWalletsReq{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptGetMigrationWalletsReq is optional GetMigrationWalletsReq.
+type OptGetMigrationWalletsReq struct {
+	Value GetMigrationWalletsReq
+	Set   bool
+}
+
+// IsSet returns true if OptGetMigrationWalletsReq was set.
+func (o OptGetMigrationWalletsReq) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptGetMigrationWalletsReq) Reset() {
+	var v GetMigrationWalletsReq
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptGetMigrationWalletsReq) SetTo(v GetMigrationWalletsReq) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptGetMigrationWalletsReq) Get() (v GetMigrationWalletsReq, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptGetMigrationWalletsReq) Or(d GetMigrationWalletsReq) GetMigrationWalletsReq {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptGetNftCollectionItemsByAddressesReq returns new OptGetNftCollectionItemsByAddressesReq with value set to v.
 func NewOptGetNftCollectionItemsByAddressesReq(v GetNftCollectionItemsByAddressesReq) OptGetNftCollectionItemsByAddressesReq {
 	return OptGetNftCollectionItemsByAddressesReq{
@@ -14394,6 +15723,52 @@ func (o OptGetWalletsByPublicKeyBulkReq) Or(d GetWalletsByPublicKeyBulkReq) GetW
 	return d
 }
 
+// NewOptInsufficientFunds returns new OptInsufficientFunds with value set to v.
+func NewOptInsufficientFunds(v InsufficientFunds) OptInsufficientFunds {
+	return OptInsufficientFunds{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptInsufficientFunds is optional InsufficientFunds.
+type OptInsufficientFunds struct {
+	Value InsufficientFunds
+	Set   bool
+}
+
+// IsSet returns true if OptInsufficientFunds was set.
+func (o OptInsufficientFunds) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptInsufficientFunds) Reset() {
+	var v InsufficientFunds
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptInsufficientFunds) SetTo(v InsufficientFunds) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptInsufficientFunds) Get() (v InsufficientFunds, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptInsufficientFunds) Or(d InsufficientFunds) InsufficientFunds {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptInt returns new OptInt with value set to v.
 func NewOptInt(v int) OptInt {
 	return OptInt{
@@ -14526,6 +15901,52 @@ func (o OptInt64) Get() (v int64, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptInt64) Or(d int64) int64 {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptJettonAssetInfo returns new OptJettonAssetInfo with value set to v.
+func NewOptJettonAssetInfo(v JettonAssetInfo) OptJettonAssetInfo {
+	return OptJettonAssetInfo{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptJettonAssetInfo is optional JettonAssetInfo.
+type OptJettonAssetInfo struct {
+	Value JettonAssetInfo
+	Set   bool
+}
+
+// IsSet returns true if OptJettonAssetInfo was set.
+func (o OptJettonAssetInfo) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptJettonAssetInfo) Reset() {
+	var v JettonAssetInfo
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptJettonAssetInfo) SetTo(v JettonAssetInfo) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptJettonAssetInfo) Get() (v JettonAssetInfo, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptJettonAssetInfo) Or(d JettonAssetInfo) JettonAssetInfo {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -14992,6 +16413,52 @@ func (o OptMessageConsequences) Or(d MessageConsequences) MessageConsequences {
 	return d
 }
 
+// NewOptMigrationPrepareRequestGasPayer returns new OptMigrationPrepareRequestGasPayer with value set to v.
+func NewOptMigrationPrepareRequestGasPayer(v MigrationPrepareRequestGasPayer) OptMigrationPrepareRequestGasPayer {
+	return OptMigrationPrepareRequestGasPayer{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptMigrationPrepareRequestGasPayer is optional MigrationPrepareRequestGasPayer.
+type OptMigrationPrepareRequestGasPayer struct {
+	Value MigrationPrepareRequestGasPayer
+	Set   bool
+}
+
+// IsSet returns true if OptMigrationPrepareRequestGasPayer was set.
+func (o OptMigrationPrepareRequestGasPayer) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptMigrationPrepareRequestGasPayer) Reset() {
+	var v MigrationPrepareRequestGasPayer
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptMigrationPrepareRequestGasPayer) SetTo(v MigrationPrepareRequestGasPayer) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptMigrationPrepareRequestGasPayer) Get() (v MigrationPrepareRequestGasPayer, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptMigrationPrepareRequestGasPayer) Or(d MigrationPrepareRequestGasPayer) MigrationPrepareRequestGasPayer {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptMultisigOrderChangingParameters returns new OptMultisigOrderChangingParameters with value set to v.
 func NewOptMultisigOrderChangingParameters(v MultisigOrderChangingParameters) OptMultisigOrderChangingParameters {
 	return OptMultisigOrderChangingParameters{
@@ -15176,6 +16643,52 @@ func (o OptNftCollectionMetadata) Or(d NftCollectionMetadata) NftCollectionMetad
 	return d
 }
 
+// NewOptNftCollectionMetadataStatus returns new OptNftCollectionMetadataStatus with value set to v.
+func NewOptNftCollectionMetadataStatus(v NftCollectionMetadataStatus) OptNftCollectionMetadataStatus {
+	return OptNftCollectionMetadataStatus{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptNftCollectionMetadataStatus is optional NftCollectionMetadataStatus.
+type OptNftCollectionMetadataStatus struct {
+	Value NftCollectionMetadataStatus
+	Set   bool
+}
+
+// IsSet returns true if OptNftCollectionMetadataStatus was set.
+func (o OptNftCollectionMetadataStatus) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptNftCollectionMetadataStatus) Reset() {
+	var v NftCollectionMetadataStatus
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptNftCollectionMetadataStatus) SetTo(v NftCollectionMetadataStatus) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptNftCollectionMetadataStatus) Get() (v NftCollectionMetadataStatus, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptNftCollectionMetadataStatus) Or(d NftCollectionMetadataStatus) NftCollectionMetadataStatus {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // NewOptNftItem returns new OptNftItem with value set to v.
 func NewOptNftItem(v NftItem) OptNftItem {
 	return OptNftItem{
@@ -15354,6 +16867,69 @@ func (o OptNftPurchaseAction) Get() (v NftPurchaseAction, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o OptNftPurchaseAction) Or(d NftPurchaseAction) NftPurchaseAction {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptNilInt64 returns new OptNilInt64 with value set to v.
+func NewOptNilInt64(v int64) OptNilInt64 {
+	return OptNilInt64{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptNilInt64 is optional nullable int64.
+type OptNilInt64 struct {
+	Value int64
+	Set   bool
+	Null  bool
+}
+
+// IsSet returns true if OptNilInt64 was set.
+func (o OptNilInt64) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptNilInt64) Reset() {
+	var v int64
+	o.Value = v
+	o.Set = false
+	o.Null = false
+}
+
+// SetTo sets value to v.
+func (o *OptNilInt64) SetTo(v int64) {
+	o.Set = true
+	o.Null = false
+	o.Value = v
+}
+
+// IsNull returns true if value is Null.
+func (o OptNilInt64) IsNull() bool { return o.Null }
+
+// SetToNull sets value to null.
+func (o *OptNilInt64) SetToNull() {
+	o.Set = true
+	o.Null = true
+	var v int64
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptNilInt64) Get() (v int64, ok bool) {
+	if o.Null {
+		return v, false
+	}
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptNilInt64) Or(d int64) int64 {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -16803,6 +18379,52 @@ func (o OptWithdrawTokenStakeRequestAction) Or(d WithdrawTokenStakeRequestAction
 	return d
 }
 
+// NewOptWithdrawXTRAction returns new OptWithdrawXTRAction with value set to v.
+func NewOptWithdrawXTRAction(v WithdrawXTRAction) OptWithdrawXTRAction {
+	return OptWithdrawXTRAction{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptWithdrawXTRAction is optional WithdrawXTRAction.
+type OptWithdrawXTRAction struct {
+	Value WithdrawXTRAction
+	Set   bool
+}
+
+// IsSet returns true if OptWithdrawXTRAction was set.
+func (o OptWithdrawXTRAction) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptWithdrawXTRAction) Reset() {
+	var v WithdrawXTRAction
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptWithdrawXTRAction) SetTo(v WithdrawXTRAction) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptWithdrawXTRAction) Get() (v WithdrawXTRAction, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptWithdrawXTRAction) Or(d WithdrawXTRAction) WithdrawXTRAction {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // Ref: #/components/schemas/Oracle
 type Oracle struct {
 	Address    string `json:"address"`
@@ -17811,7 +19433,7 @@ func (s *RemoveExtensionAction) SetExtension(val string) {
 type RewardsStats struct {
 	// Time series of APY values as [timestamp_ms, apy] pairs.
 	Apy [][]float64 `json:"apy"`
-	// Time series of total stake in TON as [timestamp_ms, stake] pairs.
+	// Time series of total stake in Gram as [timestamp_ms, stake] pairs.
 	TotalStake [][]float64 `json:"total_stake"`
 }
 
@@ -17840,16 +19462,20 @@ func (s *RewardsStats) SetTotalStake(val [][]float64) {
 // future receipts). For UI display only.
 // Ref: #/components/schemas/Risk
 type Risk struct {
-	// True if the message semantics allow sweeping all current and future remaining TON balance of the
+	// True if the message semantics allow sweeping all current and future remaining Gram balance of the
 	// wallet (e.g. “send all” / drain patterns).
 	TransferAllRemainingBalance bool `json:"transfer_all_remaining_balance"`
-	// Maximum TON amount that may leave the wallet in the worst case, in nanotons.
-	Ton int64 `json:"ton"`
+	// This field will gone after Sept. 2026, use gram instead.
+	//
+	// Deprecated: schema marks this property as deprecated.
+	Ton OptInt64 `json:"ton"`
+	// Maximum Gram amount that may leave the wallet in the worst case, in nanogram.
+	Gram int64 `json:"gram"`
 	// Jetton positions that may be debited from the wallet in the worst case.
 	Jettons []JettonQuantity `json:"jettons"`
 	// NFT items that may be transferred out of the wallet in the worst case.
 	Nfts []NftItem `json:"nfts"`
-	// Estimated equivalent of all assets at risk (TON, jettons, NFTs) in the selected currency from
+	// Estimated equivalent of all assets at risk (Gram, jettons, NFTs) in the selected currency from
 	// currencyQuery (e.g. USD). Approximate, best-effort UI value.
 	TotalEquivalent OptFloat32 `json:"total_equivalent"`
 }
@@ -17860,8 +19486,13 @@ func (s *Risk) GetTransferAllRemainingBalance() bool {
 }
 
 // GetTon returns the value of Ton.
-func (s *Risk) GetTon() int64 {
+func (s *Risk) GetTon() OptInt64 {
 	return s.Ton
+}
+
+// GetGram returns the value of Gram.
+func (s *Risk) GetGram() int64 {
+	return s.Gram
 }
 
 // GetJettons returns the value of Jettons.
@@ -17885,8 +19516,13 @@ func (s *Risk) SetTransferAllRemainingBalance(val bool) {
 }
 
 // SetTon sets the value of Ton.
-func (s *Risk) SetTon(val int64) {
+func (s *Risk) SetTon(val OptInt64) {
 	s.Ton = val
+}
+
+// SetGram sets the value of Gram.
+func (s *Risk) SetGram(val int64) {
+	s.Gram = val
 }
 
 // SetJettons sets the value of Jettons.
@@ -17972,9 +19608,9 @@ type RoundRewardsResponse struct {
 	StartBlock uint32 `json:"start_block"`
 	// Last masterchain block of the round.
 	EndBlock uint32 `json:"end_block"`
-	// Amount in nanotons.
+	// Amount in nanograms.
 	TotalBonuses int64 `json:"total_bonuses"`
-	// Amount in nanotons.
+	// Amount in nanograms.
 	TotalStake int64                  `json:"total_stake"`
 	Validators []ValidatorRewardEntry `json:"validators"`
 	Error      OptString              `json:"error"`
@@ -18559,11 +20195,15 @@ func (s *SizeLimitsConfig) SetMaxAccStateBits(val OptInt64) {
 type SmartContractAction struct {
 	Executor AccountAddress `json:"executor"`
 	Contract AccountAddress `json:"contract"`
-	// Amount in nanotons.
-	TonAttached int64     `json:"ton_attached"`
-	Operation   string    `json:"operation"`
-	Payload     OptString `json:"payload"`
-	Refund      OptRefund `json:"refund"`
+	// Amount in nanograms.
+	//
+	// Deprecated: schema marks this property as deprecated.
+	TonAttached OptInt64 `json:"ton_attached"`
+	// Amount in nanograms.
+	GramAttached int64     `json:"gram_attached"`
+	Operation    string    `json:"operation"`
+	Payload      OptString `json:"payload"`
+	Refund       OptRefund `json:"refund"`
 }
 
 // GetExecutor returns the value of Executor.
@@ -18577,8 +20217,13 @@ func (s *SmartContractAction) GetContract() AccountAddress {
 }
 
 // GetTonAttached returns the value of TonAttached.
-func (s *SmartContractAction) GetTonAttached() int64 {
+func (s *SmartContractAction) GetTonAttached() OptInt64 {
 	return s.TonAttached
+}
+
+// GetGramAttached returns the value of GramAttached.
+func (s *SmartContractAction) GetGramAttached() int64 {
+	return s.GramAttached
 }
 
 // GetOperation returns the value of Operation.
@@ -18607,8 +20252,13 @@ func (s *SmartContractAction) SetContract(val AccountAddress) {
 }
 
 // SetTonAttached sets the value of TonAttached.
-func (s *SmartContractAction) SetTonAttached(val int64) {
+func (s *SmartContractAction) SetTonAttached(val OptInt64) {
 	s.TonAttached = val
+}
+
+// SetGramAttached sets the value of GramAttached.
+func (s *SmartContractAction) SetGramAttached(val int64) {
+	s.GramAttached = val
 }
 
 // SetOperation sets the value of Operation.
@@ -19331,7 +20981,7 @@ func (s *TonConnectProofReqProofDomain) SetValue(val string) {
 type TonTransferAction struct {
 	Sender    AccountAddress `json:"sender"`
 	Recipient AccountAddress `json:"recipient"`
-	// Amount in nanotons.
+	// Amount in nanograms.
 	Amount           int64               `json:"amount"`
 	Comment          OptString           `json:"comment"`
 	EncryptedComment OptEncryptedComment `json:"encrypted_comment"`
@@ -20288,11 +21938,11 @@ type ValidatorRewardEntry struct {
 	Rank int `json:"rank"`
 	// Validator's public key (hex-encoded Ed25519).
 	PublicKey string `json:"public_key"`
-	// Amount in nanotons.
+	// Amount in nanograms.
 	EffectiveStake int64 `json:"effective_stake"`
 	// Fraction of total effective stake (0–1).
 	Weight float64 `json:"weight"`
-	// Amount in nanotons.
+	// Amount in nanograms.
 	Reward int64 `json:"reward"`
 	// Pool smart contract address (bounceable, base64url).
 	Pool OptString `json:"pool"`
@@ -20300,9 +21950,9 @@ type ValidatorRewardEntry struct {
 	PoolType         OptValidatorRewardEntryPoolType `json:"pool_type"`
 	OwnerAddress     OptString                       `json:"owner_address"`
 	ValidatorAddress OptString                       `json:"validator_address"`
-	// Amount in nanotons.
+	// Amount in nanograms.
 	ValidatorStake OptInt64 `json:"validator_stake"`
-	// Amount in nanotons.
+	// Amount in nanograms.
 	NominatorsStake OptInt64 `json:"nominators_stake"`
 	// Total funds deposited by the pool: effective_stake + credit (leftover balance kept in the elector
 	// contract after election).
@@ -20591,11 +22241,11 @@ type ValidatorsResponse struct {
 	// Election ID of the round immediately after this one. Omitted when the current round is not yet
 	// finished (next round not known).
 	NextElectionID OptInt64 `json:"next_election_id"`
-	// Amount in nanotons.
+	// Amount in nanograms.
 	ElectorBalance int64 `json:"elector_balance"`
-	// Amount in nanotons.
+	// Amount in nanograms.
 	TotalStake int64 `json:"total_stake"`
-	// Amount in nanotons.
+	// Amount in nanograms.
 	RewardPerBlock int64                  `json:"reward_per_block"`
 	Validators     []ValidatorRewardEntry `json:"validators"`
 }
@@ -20808,8 +22458,12 @@ func (s *ValidatorsSetListItem) SetAdnlAddr(val OptString) {
 
 // Ref: #/components/schemas/ValueFlow
 type ValueFlow struct {
-	Account AccountAddress         `json:"account"`
-	Ton     int64                  `json:"ton"`
+	Account AccountAddress `json:"account"`
+	// This field will gone after Sept. 2026, use gram instead.
+	//
+	// Deprecated: schema marks this property as deprecated.
+	Ton     OptInt64               `json:"ton"`
+	Gram    int64                  `json:"gram"`
 	Fees    int64                  `json:"fees"`
 	Jettons []ValueFlowJettonsItem `json:"jettons"`
 }
@@ -20820,8 +22474,13 @@ func (s *ValueFlow) GetAccount() AccountAddress {
 }
 
 // GetTon returns the value of Ton.
-func (s *ValueFlow) GetTon() int64 {
+func (s *ValueFlow) GetTon() OptInt64 {
 	return s.Ton
+}
+
+// GetGram returns the value of Gram.
+func (s *ValueFlow) GetGram() int64 {
+	return s.Gram
 }
 
 // GetFees returns the value of Fees.
@@ -20840,8 +22499,13 @@ func (s *ValueFlow) SetAccount(val AccountAddress) {
 }
 
 // SetTon sets the value of Ton.
-func (s *ValueFlow) SetTon(val int64) {
+func (s *ValueFlow) SetTon(val OptInt64) {
 	s.Ton = val
+}
+
+// SetGram sets the value of Gram.
+func (s *ValueFlow) SetGram(val int64) {
+	s.Gram = val
 }
 
 // SetFees sets the value of Fees.
@@ -21446,6 +23110,32 @@ func (s *WithdrawTokenStakeRequestAction) SetProtocol(val Protocol) {
 // SetStakeMeta sets the value of StakeMeta.
 func (s *WithdrawTokenStakeRequestAction) SetStakeMeta(val OptPrice) {
 	s.StakeMeta = val
+}
+
+// Ref: #/components/schemas/WithdrawXTRAction
+type WithdrawXTRAction struct {
+	User   AccountAddress `json:"user"`
+	Amount string         `json:"amount"`
+}
+
+// GetUser returns the value of User.
+func (s *WithdrawXTRAction) GetUser() AccountAddress {
+	return s.User
+}
+
+// GetAmount returns the value of Amount.
+func (s *WithdrawXTRAction) GetAmount() string {
+	return s.Amount
+}
+
+// SetUser sets the value of User.
+func (s *WithdrawXTRAction) SetUser(val AccountAddress) {
+	s.User = val
+}
+
+// SetAmount sets the value of Amount.
+func (s *WithdrawXTRAction) SetAmount(val string) {
+	s.Amount = val
 }
 
 // Ref: #/components/schemas/WorkchainDescr

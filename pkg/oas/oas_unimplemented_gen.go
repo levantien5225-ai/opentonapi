@@ -159,6 +159,16 @@ func (UnimplementedHandler) GetAccount(ctx context.Context, params GetAccountPar
 	return r, ht.ErrNotImplemented
 }
 
+// GetAccountDefiAssets implements getAccountDefiAssets operation.
+//
+// Return DeFi assets locked in custom smart contracts: currently returns TON Whales staking and EVAA
+// lending positions.
+//
+// GET /v2/accounts/{account_id}/defi/assets
+func (UnimplementedHandler) GetAccountDefiAssets(ctx context.Context, params GetAccountDefiAssetsParams) (r *DefiAssets, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
 // GetAccountDiff implements getAccountDiff operation.
 //
 // Get account's balance change.
@@ -617,10 +627,20 @@ func (UnimplementedHandler) GetLibraryByHash(ctx context.Context, params GetLibr
 
 // GetMarketsRates implements getMarketsRates operation.
 //
-// Get the TON price from markets.
+// Get the Gram price from markets.
 //
 // GET /v2/rates/markets
 func (UnimplementedHandler) GetMarketsRates(ctx context.Context) (r *GetMarketsRatesOK, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// GetMigrationWallets implements getMigrationWallets operation.
+//
+// Get migratable assets value (TON balance, jettons with prices, NFT count) for several wallets at
+// once.
+//
+// POST /v2/migration/wallets
+func (UnimplementedHandler) GetMigrationWallets(ctx context.Context, req OptGetMigrationWalletsReq, params GetMigrationWalletsParams) (r *MigrationWallets, _ error) {
 	return r, ht.ErrNotImplemented
 }
 
@@ -1014,6 +1034,15 @@ func (UnimplementedHandler) GetWalletsByPublicKey(ctx context.Context, params Ge
 //
 // POST /v2/pubkeys/wallets/_bulk
 func (UnimplementedHandler) GetWalletsByPublicKeyBulk(ctx context.Context, req OptGetWalletsByPublicKeyBulkReq) (r *WalletsByPublicKeys, _ error) {
+	return r, ht.ErrNotImplemented
+}
+
+// PrepareMigration implements prepareMigration operation.
+//
+// Prepare ordered signable transactions that migrate every asset from `from` to `to`.
+//
+// POST /v2/migration/prepare
+func (UnimplementedHandler) PrepareMigration(ctx context.Context, req *MigrationPrepareRequest) (r *MigrationPrepareResponse, _ error) {
 	return r, ht.ErrNotImplemented
 }
 

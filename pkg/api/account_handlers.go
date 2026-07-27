@@ -15,8 +15,9 @@ import (
 	"sync"
 	"time"
 
+	"maps"
+
 	"go.uber.org/zap"
-	"golang.org/x/exp/maps"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/go-faster/jx"
@@ -118,6 +119,13 @@ func (h *Handler) GetAccount(ctx context.Context, params oas.GetAccountParams) (
 	} else {
 		res = convertToAccount(rawAccount, nil, h.state, h.spamFilter)
 	}
+	if !res.IsScam.Value && isNftCollection(rawAccount) {
+		if meta, ok := h.metaCache.getCollectionMeta(ctx, account.ID); ok {
+			if h.spamFilter.HasBlacklistedComment(meta.Name, meta.Description) {
+				res.IsScam = oas.NewOptBool(true)
+			}
+		}
+	}
 	if strings.HasSuffix(params.AccountID, ".ton") {
 		trust := h.spamFilter.TonDomainTrust(params.AccountID)
 		if trust == core.TrustBlacklist {
@@ -187,7 +195,7 @@ func (h *Handler) GetAccounts(ctx context.Context, request oas.OptGetAccountsReq
 	for _, i := range ids {
 		account := results[i]
 		if currencyPrice != 0 {
-			convertedAmount := float64(account.Balance/int64(ton.OneTON)) / currencyPrice
+			convertedAmount := float64(account.Balance/int64(ton.OneGRAM)) / currencyPrice
 			currenciesBalance := map[string]jx.Raw{currency: jx.Raw(fmt.Sprintf("%f", convertedAmount))}
 			account.CurrenciesBalance.SetTo(currenciesBalance)
 		}
@@ -224,7 +232,7 @@ func (h *Handler) GetBlockchainAccountTransactions(ctx context.Context, params o
 		return nil, err
 	}
 	for i, tx := range txs {
-		result.Transactions[i] = convertTransaction(*tx, accountObject.Interfaces, h.addressBook)
+		result.Transactions[i] = h.convertTransaction(*tx, accountObject.Interfaces, h.addressBook)
 	}
 	return &result, nil
 }
@@ -326,8 +334,10 @@ func (h *Handler) SearchAccounts(ctx context.Context, params oas.SearchAccountsP
 	attachedAccounts := h.addressBook.SearchAttachedAccountsByPrefix(params.Name)
 	accounts := make([]addressbook.AttachedAccount, 0, len(attachedAccounts))
 	for _, account := range attachedAccounts {
-		if account.Symbol != "" {
-			trust := h.spamFilter.JettonTrust(account.Wallet, account.Symbol, account.Name, account.Preview)
+		if (account.Type == addressbook.JettonNameAccountType || account.Type == addressbook.JettonSymbolAccountType) &&
+			account.Trust != core.TrustWhitelist {
+			// name has " · jetton" suffix, slug is the original name
+			trust := h.spamFilter.JettonTrust(account.Wallet, account.Symbol, account.Slug, account.Preview)
 			if trust == core.TrustBlacklist {
 				continue
 			}
@@ -588,10 +598,10 @@ func (h *Handler) BlockchainAccountInspect(ctx context.Context, params oas.Block
 		resp.Source = oas.NewOptSource(oas.Source{Files: sourceFiles})
 	}
 	knownMethods := make(map[int64]string)
-	for _, name := range maps.Keys(abi.KnownGetMethodsDecoder) {
+	for name := range maps.Keys(abi.KnownGetMethodsDecoder) {
 		knownMethods[int64(utils.MethodIdFromName(name))] = name
 	}
-	for _, methodID := range maps.Keys(info.Methods) {
+	for methodID := range maps.Keys(info.Methods) {
 		if method, ok := knownMethods[methodID]; ok {
 			resp.Methods = append(resp.Methods, oas.Method{
 				ID:     methodID,
@@ -757,7 +767,7 @@ func (h *Handler) convertSubscriptionsV2(ctx context.Context, sub core.Subscript
 		res.Metadata.SetEncryptedBinary(fmt.Sprintf("%x", sub.Metadata))
 	}
 	res.PaymentPerPeriod = h.convertPrice(ctx, core.Price{
-		Currency: core.Currency{Type: core.CurrencyTON},
+		Currency: core.Currency{Type: core.CurrencyNative},
 		Amount:   *big.NewInt(sub.PaymentPerPeriod),
 	})
 	return res
@@ -782,7 +792,7 @@ func (h *Handler) convertSubscriptionsV1(ctx context.Context, sub core.Subscript
 		res.Status = oas.SubscriptionStatusActive
 	}
 	res.PaymentPerPeriod = h.convertPrice(ctx, core.Price{
-		Currency: core.Currency{Type: core.CurrencyTON},
+		Currency: core.Currency{Type: core.CurrencyNative},
 		Amount:   *big.NewInt(sub.Amount),
 	})
 	return res

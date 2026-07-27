@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"sync"
 
-	"golang.org/x/exp/slog"
+	"log/slog"
 
 	"github.com/go-faster/errors"
 	"github.com/tonkeeper/opentonapi/pkg/chainstate"
@@ -52,8 +53,10 @@ type Handler struct {
 	metaCache      metadataCache
 	tonConnect     *tonconnect.Server
 	verifierSource verifierSource
+	defiAssets     defiAssetsSource
 	rewards        *rewards.Service
 	stats          *rewards.Stats
+	publicAPIURL   string
 
 	// parallelTraceProcessing enables parallel trace-to-action conversion.
 	parallelTraceProcessing bool
@@ -79,7 +82,11 @@ type Handler struct {
 }
 
 func (h *Handler) NewError(ctx context.Context, err error) *oas.ErrorStatusCode {
-	return new(oas.ErrorStatusCode)
+	var e *oas.ErrorStatusCode
+	if errors.As(err, &e) {
+		return e
+	}
+	return toError(http.StatusInternalServerError, err)
 }
 
 // Options configures behavior of a Handler instance.
@@ -96,9 +103,11 @@ type Options struct {
 	ctxToDetails            ctxToDetails
 	gasless                 Gasless
 	verifier                verifierSource
+	defiAssets              defiAssetsSource
 	score                   scoreSource
 	parallelTraceProcessing bool
 	archiveLiteServers      []config.LiteServer
+	publicAPIURL            string
 }
 
 type Option func(o *Options)
@@ -180,6 +189,15 @@ func WithScore(score scoreSource) Option {
 	}
 }
 
+// WithDefiAssets configures the source of an account's defi positions
+// (staking, lending, liquidity pools, etc.) used by GetAccountDefiAssets.
+// When not set, GetAccountDefiAssets returns an empty result.
+func WithDefiAssets(source defiAssetsSource) Option {
+	return func(o *Options) {
+		o.defiAssets = source
+	}
+}
+
 func WithParallelTraceProcessing(enabled bool) Option {
 	return func(o *Options) {
 		o.parallelTraceProcessing = enabled
@@ -189,6 +207,12 @@ func WithParallelTraceProcessing(enabled bool) Option {
 func WithArchiveLiteServers(s []config.LiteServer) Option {
 	return func(o *Options) {
 		o.archiveLiteServers = s
+	}
+}
+
+func WithPublicAPIURL(publicAPIURL string) Option {
+	return func(o *Options) {
+		o.publicAPIURL = publicAPIURL
 	}
 }
 
@@ -243,6 +267,9 @@ func NewHandler(logger *zap.Logger, opts ...Option) (*Handler, error) {
 	if options.score == nil {
 		options.score = score.NewScore()
 	}
+	if options.publicAPIURL == "" {
+		options.publicAPIURL = "https://tonapi.io"
+	}
 	tongoVersion, err := GetPackageVersionInt("tongo")
 	if err != nil {
 		slog.Warn("unable to detect tongo version", "err", err)
@@ -271,8 +298,10 @@ func NewHandler(logger *zap.Logger, opts ...Option) (*Handler, error) {
 		score:          options.score,
 		ratesSource:    rates.InitCalculator(options.ratesSource),
 		verifierSource: options.verifier,
+		defiAssets:     options.defiAssets,
+		publicAPIURL:   options.publicAPIURL,
 		metaCache: metadataCache{
-			collectionsCache: cache.NewLRUCache[tongo.AccountID, tep64.Metadata](10000, "nft_metadata_cache"),
+			collectionsCache: cache.NewLRUCache[tongo.AccountID, collectionMeta](10000, "nft_metadata_cache"),
 			jettonsCache:     cache.NewLRUCache[tongo.AccountID, tep64.Metadata](10000, "jetton_metadata_cache"),
 			storage:          options.storage,
 		},

@@ -15,7 +15,7 @@ import (
 	"github.com/tonkeeper/tongo/tlb"
 
 	"github.com/tonkeeper/tongo"
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"github.com/tonkeeper/opentonapi/pkg/api/i18n"
 	"github.com/tonkeeper/opentonapi/pkg/core"
@@ -191,7 +191,7 @@ func (h *Handler) GetStakingPools(ctx context.Context, params oas.GetStakingPool
 			Name: references.WhalesPoolImplementationsName,
 			Description: i18n.T(params.AcceptLanguage.Value, i18n.C{DefaultMessage: &i18n.M{
 				ID:    "poolImplementationDescription",
-				Other: "Minimum deposit {{.Deposit}} TON",
+				Other: "Minimum deposit {{.Deposit}} Gram",
 			}, TemplateData: i18n.Template{"Deposit": minWhales / 1_000_000_000}}),
 			URL: references.WhalesPoolImplementationsURL,
 		},
@@ -263,7 +263,7 @@ func convertStaking(w core.Nominator) oas.AccountStakingInfo {
 }
 
 func roundTons(amount int64) int64 {
-	if amount < int64(ton.OneTON) {
+	if amount < int64(ton.OneGRAM) {
 		return amount
 	}
 	return decimal.New(amount, 0).Round(-7).IntPart()

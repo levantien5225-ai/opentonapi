@@ -107,6 +107,13 @@ type Handler interface {
 	//
 	// GET /v2/accounts/{account_id}
 	GetAccount(ctx context.Context, params GetAccountParams) (*Account, error)
+	// GetAccountDefiAssets implements getAccountDefiAssets operation.
+	//
+	// Return DeFi assets locked in custom smart contracts: currently returns TON Whales staking and EVAA
+	// lending positions.
+	//
+	// GET /v2/accounts/{account_id}/defi/assets
+	GetAccountDefiAssets(ctx context.Context, params GetAccountDefiAssetsParams) (*DefiAssets, error)
 	// GetAccountDiff implements getAccountDiff operation.
 	//
 	// Get account's balance change.
@@ -418,10 +425,17 @@ type Handler interface {
 	GetLibraryByHash(ctx context.Context, params GetLibraryByHashParams) (*BlockchainLibrary, error)
 	// GetMarketsRates implements getMarketsRates operation.
 	//
-	// Get the TON price from markets.
+	// Get the Gram price from markets.
 	//
 	// GET /v2/rates/markets
 	GetMarketsRates(ctx context.Context) (*GetMarketsRatesOK, error)
+	// GetMigrationWallets implements getMigrationWallets operation.
+	//
+	// Get migratable assets value (TON balance, jettons with prices, NFT count) for several wallets at
+	// once.
+	//
+	// POST /v2/migration/wallets
+	GetMigrationWallets(ctx context.Context, req OptGetMigrationWalletsReq, params GetMigrationWalletsParams) (*MigrationWallets, error)
 	// GetMultisigAccount implements getMultisigAccount operation.
 	//
 	// Get multisig account info.
@@ -686,6 +700,12 @@ type Handler interface {
 	//
 	// POST /v2/pubkeys/wallets/_bulk
 	GetWalletsByPublicKeyBulk(ctx context.Context, req OptGetWalletsByPublicKeyBulkReq) (*WalletsByPublicKeys, error)
+	// PrepareMigration implements prepareMigration operation.
+	//
+	// Prepare ordered signable transactions that migrate every asset from `from` to `to`.
+	//
+	// POST /v2/migration/prepare
+	PrepareMigration(ctx context.Context, req *MigrationPrepareRequest) (*MigrationPrepareResponse, error)
 	// ReindexAccount implements reindexAccount operation.
 	//
 	// Update internal cache for a particular account.
